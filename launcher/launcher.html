@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="{{LANG}}" data-theme="{{THEME}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dados & Destino</title>
+    <!-- Nada é carregado da internet: a tela inicial usa só fontes do Windows. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'" />
+    <style>
+      /* Cores dos temas: o app coloca aqui o conteúdo de site/src/themes.css. */
+      /*{{THEMES}}*/
+    </style>
+    <style>
+      :root { --mono: Consolas, 'DM Mono', monospace; --serif: Georgia, 'Fraunces', serif; --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent); }
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body { margin: 0; display: grid; place-items: center; padding: 32px 20px; color: var(--ink); background: var(--bg) radial-gradient(ellipse at 50% 8%, var(--bg-glow) 0, var(--bg-mid) 42%, var(--bg) 80%) fixed; font-family: 'Segoe UI', 'DM Sans', sans-serif; }
+      main { width: min(760px, 100%); }
+      .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .brand { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 500 11px var(--mono); letter-spacing: 1px; }
+      .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border: 1.5px solid var(--accent); color: var(--accent); font: 700 11px var(--mono); clip-path: polygon(50% 0, 94% 23%, 87% 78%, 50% 100%, 12% 78%, 6% 23%); }
+      .brand i { color: var(--warm); font-style: normal; }
+      .langs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); }
+      .langs button { min-height: 26px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 11px var(--mono); }
+      .langs button:hover:not(:disabled) { color: var(--ink); background: transparent; transform: none; }
+      .langs button[aria-pressed='true'] { background: var(--action); color: var(--on-action); }
+      h1 { margin: 28px 0 8px; font: 600 clamp(34px, 6vw, 50px)/1 var(--serif); }
+      h1 em { color: var(--accent); font-weight: 500; }
+      .lead { margin: 0 0 30px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+      .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .card { display: flex; flex-direction: column; gap: 12px; padding: 22px 20px 20px; border: 1px solid var(--line); border-top: 2px solid var(--accent); border-radius: 4px; background: var(--surface); box-shadow: 0 18px 50px color-mix(in srgb, var(--shadow) 40%, transparent); }
+      .card:last-child { border-top-color: var(--warm); }
+      .kicker { color: var(--warm); font: 10px var(--mono); letter-spacing: 1.2px; }
+      h2 { margin: 0; font: 500 24px var(--serif); }
+      .card p { flex: 1; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+      button { min-height: 42px; padding: 0 14px; border: 0; border-radius: 3px; background: var(--action); color: var(--on-action); cursor: pointer; font: 600 13px 'Segoe UI', sans-serif; transition: background .18s, transform .18s; }
+      button:hover:not(:disabled) { background: var(--action-hover); transform: translateY(-1px); }
+      button:disabled { cursor: wait; opacity: .6; }
+      button:focus-visible, input:focus-visible { outline: 2px solid var(--warm); outline-offset: 3px; }
+      form { display: flex; flex-direction: column; gap: 10px; }
+      input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--field); color: var(--ink); font: 12px var(--mono); }
+      input::placeholder { color: var(--faint); }
+      .ghost { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+      .ghost:hover:not(:disabled) { border-color: var(--warm); background: transparent; color: var(--warm); }
+      .status { min-height: 20px; margin: 18px 0 0; color: var(--warm); font-size: 13px; line-height: 1.5; }
+      .hint { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font: 11px/1.7 var(--mono); letter-spacing: .3px; }
+      @media (max-width: 640px) { .choices { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="top">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">D20</span><span>DADOS <i>&</i> DESTINO</span></div>
+        <div class="langs" role="group" aria-label="Idioma / Language">
+          <button type="button" data-lang="pt-BR">PT-BR</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+      <h1><span data-t="title1"></span><br /><em data-t="title2"></em></h1>
+      <p class="lead" data-t="lead"></p>
+
+      <div class="choices">
+        <section class="card">
+          <span class="kicker" data-t="hostKicker"></span>
+          <h2 data-t="hostTitle"></h2>
+          <p data-t="hostText"></p>
+          <button id="host" type="button" data-t="hostButton"></button>
+        </section>
+
+        <section class="card">
+          <span class="kicker" data-t="joinKicker"></span>
+          <h2 data-t="joinTitle"></h2>
+          <p data-t="joinText"></p>
+          <form id="join-form">
+            <input id="link" type="text" autocomplete="off" spellcheck="false" placeholder="https://....trycloudflare.com/?room=..." />
+            <button class="ghost" type="submit" data-t="joinButton"></button>
+          </form>
+        </section>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite" data-message="{{MESSAGE}}" data-detail="{{DETAIL}}"></p>
+      <p class="hint" data-t="hint"></p>
+    </main>
+
+    <script>
+      const texts = {
+        'pt-BR': {
+          title1: 'Role os dados.', title2: 'Junte a mesa.',
+          lead: 'Um de vocês hospeda a mesa no próprio computador. Os outros entram pelo link que ele mandar.',
+          hostKicker: 'SOU O ANFITRIÃO', hostTitle: 'Hospedar mesa', hostButton: 'Hospedar mesa',
+          hostText: 'Seu computador vira o servidor da mesa. O app gera um link da internet para você mandar aos amigos. Deixe o app aberto enquanto jogam.',
+          joinKicker: 'VOU JOGAR NA MESA DE UM AMIGO', joinTitle: 'Entrar numa mesa', joinButton: 'Entrar',
+          joinText: 'Cole o link que o anfitrião mandou.', linkLabel: 'Link da mesa',
+          hint: 'Seus amigos não precisam instalar nada: o mesmo link também abre no navegador, até no celular.',
+          starting: 'Ligando a mesa…', opening: 'Abrindo a mesa…', emptyLink: 'Cole o link que o anfitrião mandou.',
+          HOSTING_STILL_ON: 'Sua mesa continua no ar enquanto o app estiver aberto.',
+          NOT_TABLE_LINK: 'Por segurança, o app só abre links de mesa (terminados em trycloudflare.com). Confira o link que o anfitrião mandou.',
+          BAD_LINK: 'Esse link não parece certo. Cole o link inteiro que o anfitrião mandou.',
+          HOST_FAILED: 'Não foi possível hospedar a mesa: ',
+          OPEN_FAILED: 'Não foi possível abrir a mesa. Confira o link e se o anfitrião está com o app aberto.',
+        },
+        en: {
+          title1: 'Roll the dice.', title2: 'Gather the table.',
+          lead: 'One of you hosts the table on their own computer. Everyone else joins with the link they send.',
+          hostKicker: 'I AM THE HOST', hostTitle: 'Host a table', hostButton: 'Host a table',
+          hostText: 'Your computer becomes the table server. The app creates an internet link for you to send to your friends. Keep the app open while you play.',
+          joinKicker: 'I WILL PLAY AT A FRIEND’S TABLE', joinTitle: 'Join a table', joinButton: 'Join',
+          joinText: 'Paste the link the host sent you.', linkLabel: 'Table link',
+          hint: 'Your friends don’t need to install anything: the same link also opens in a browser, even on a phone.',
+          starting: 'Starting the table…', opening: 'Opening the table…', emptyLink: 'Paste the link the host sent you.',
+          HOSTING_STILL_ON: 'Your table stays online while the app is open.',
+          NOT_TABLE_LINK: 'For safety, the app only opens table links (ending in trycloudflare.com). Check the link the host sent.',
+          BAD_LINK: 'That link doesn’t look right. Paste the whole link the host sent.',
+          HOST_FAILED: 'Could not host the table: ',
+          OPEN_FAILED: 'Could not open the table. Check the link and whether the host has the app open.',
+        },
+      };
+      const webview = (window.chrome && window.chrome.webview) || { postMessage() {}, addEventListener() {} };
+      const status = document.querySelector('#status');
+      const actionButtons = [...document.querySelectorAll('#host, #join-form button')];
+      const linkInput = document.querySelector('#link');
+      let language = texts[document.documentElement.lang] ? document.documentElement.lang : 'pt-BR';
+      let statusMessage = { code: status.dataset.message, detail: status.dataset.detail };
+
+      function tr(key) {
+        return texts[language][key] || texts['pt-BR'][key] || '';
+      }
+
+      function renderStatus() {
+        const { code, detail, key } = statusMessage;
+        status.textContent = key ? tr(key) : code ? tr(code) + (detail || '') : '';
+      }
+
+      function render() {
+        document.documentElement.lang = language;
+        document.querySelectorAll('[data-t]').forEach((element) => { element.textContent = tr(element.dataset.t); });
+        document.querySelectorAll('[data-lang]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.lang === language)));
+        linkInput.setAttribute('aria-label', tr('linkLabel'));
+        renderStatus();
+      }
+
+      function setBusy(busy, message) {
+        actionButtons.forEach((button) => { button.disabled = busy; });
+        statusMessage = message || {};
+        renderStatus();
+      }
+
+      document.querySelectorAll('[data-lang]').forEach((button) => button.addEventListener('click', () => {
+        language = button.dataset.lang;
+        render();
+        webview.postMessage({ action: 'settings', language });
+      }));
+
+      document.querySelector('#host').addEventListener('click', () => {
+        setBusy(true, { key: 'starting' });
+        webview.postMessage({ action: 'host' });
+      });
+
+      document.querySelector('#join-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const link = linkInput.value.trim();
+        if (!link) {
+          statusMessage = { key: 'emptyLink' };
+          renderStatus();
+          linkInput.focus();
+          return;
+        }
+        setBusy(true, { key: 'opening' });
+        webview.postMessage({ action: 'join', link });
+      });
+
+      webview.addEventListener('message', (event) => {
+        if (event.data && event.data.error) {
+          setBusy(false, { code: event.data.error, detail: event.data.detail || '' });
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>

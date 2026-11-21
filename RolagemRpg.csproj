@@ -8,25 +8,30 @@
     <AssemblyName>DadosDestino</AssemblyName>
     <RootNamespace>RolagemRpg</RootNamespace>
     <Product>Dados &amp; Destino</Product>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <!-- O pacote do WebView2 traz uma referência de WPF que este app não usa. -->
     <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
     <!-- Não é um site do IIS: dispensa o web.config. -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
-    <!-- O site vai dentro do .exe, então o app é um arquivo só. -->
-    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.11" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
   </ItemGroup>
 
+  <!--
+    O app sai em pastas, ao lado do DadosDestino.exe:
+      site/      a mesa (HTML, CSS, JS)      launcher/  a tela inicial
+      docs/      como o app funciona        config/ e dados/ são criadas quando o app abre
+  -->
   <ItemGroup>
-    <Content Remove="wwwroot\**" />
-    <EmbeddedResource Include="wwwroot\**" />
-    <EmbeddedResource Include="Launcher\launcher.html" LogicalName="launcher.html" />
+    <Content Remove="site\**;launcher\**;docs\**" />
+    <None Remove="site\**;launcher\**;docs\**" />
+    <None Include="site\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="launcher\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="docs\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="LEIA-ME.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <!-- Arquivos dos testes em Node não fazem parte do app. -->
     <Content Remove="package.json;tests\**" />
     <None Remove="tests\**" />

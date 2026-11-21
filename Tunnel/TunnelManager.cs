@@ -8,7 +8,7 @@ public sealed record TunnelSnapshot(string Status, int Percent, string? Url, str
 // Gera um link público (https://....trycloudflare.com) que leva até o servidor
 // deste computador, usando o "quick tunnel" gratuito da Cloudflare: sem conta e
 // sem abrir portas no roteador. O conector (cloudflared) é baixado do GitHub
-// oficial da Cloudflare na primeira vez e fica guardado em AppData.
+// oficial da Cloudflare na primeira vez e fica guardado em dados/conector.
 public sealed partial class TunnelManager : IDisposable
 {
     private const string DownloadUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe";
@@ -17,8 +17,7 @@ public sealed partial class TunnelManager : IDisposable
     private static bool leftoversCleaned;
 
     private readonly object gate = new();
-    private readonly string toolPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DadosDestino", "cloudflared.exe");
+    private readonly string toolPath = Path.Combine(AppPaths.ConnectorFolder, "cloudflared.exe");
     private Process? process;
     private int port;
     private int generation;
@@ -97,7 +96,7 @@ public sealed partial class TunnelManager : IDisposable
             info.ArgumentList.Add("--url");
             info.ArgumentList.Add($"http://127.0.0.1:{port}");
 
-            var started = Process.Start(info) ?? throw new InvalidOperationException("O conector da Cloudflare não abriu.");
+            var started = Process.Start(info) ?? throw new InvalidOperationException("CONNECTOR_START_FAILED");
             string? foundUrl = null;
             void OnLine(string? line)
             {
@@ -137,7 +136,7 @@ public sealed partial class TunnelManager : IDisposable
                         process = null;
                         status = "error";
                         url = null;
-                        error = "O link da internet caiu.";
+                        error = "TUNNEL_DROPPED";
                     }
                 }
             };
@@ -161,7 +160,7 @@ public sealed partial class TunnelManager : IDisposable
                 {
                     StopProcess();
                     status = "error";
-                    error = "A Cloudflare demorou para responder. Verifique sua internet.";
+                    error = "TUNNEL_TIMEOUT";
                 }
             }
         }
@@ -174,7 +173,7 @@ public sealed partial class TunnelManager : IDisposable
                     StopProcess();
                     status = "error";
                     error = exception is HttpRequestException or TaskCanceledException
-                        ? "Não foi possível baixar o conector da Cloudflare. Verifique sua internet."
+                        ? "CONNECTOR_DOWNLOAD_FAILED"
                         : exception.Message;
                 }
             }
@@ -232,7 +231,7 @@ public sealed partial class TunnelManager : IDisposable
         if (!Authenticode.IsSignedBy(partialPath, CloudflareSigner))
         {
             File.Delete(partialPath);
-            throw new InvalidOperationException("O conector baixado não tem a assinatura digital da Cloudflare e foi descartado por segurança.");
+            throw new InvalidOperationException("CONNECTOR_UNSIGNED");
         }
         File.Move(partialPath, toolPath, overwrite: true);
 

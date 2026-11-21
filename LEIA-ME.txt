@@ -1,0 +1,32 @@
+DADOS & DESTINO
+Mesa de rolagem de dados para RPG, para jogar com amigos pela internet.
+
+COMO JOGAR
+1. Abra o DadosDestino.exe e clique em "Hospedar mesa".
+2. Crie a sala (nome, número de jogadores, pública ou privada).
+3. No topo, use o botão de copiar ao lado de "Link da mesa" e mande o link para os amigos.
+   O olho mostra ou esconde o link.
+4. Os amigos abrem o link no navegador (até no celular) e entram como jogador ou espectador.
+5. Deixe o app aberto enquanto jogam.
+
+A engrenagem no topo troca o idioma (Português / English), o tema de cores e as animações.
+
+Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como
+mudar textos, cores e limites das salas, leia docs\COMO-FUNCIONA.md.
+
+---
+
+DICE & DESTINY
+A dice rolling table for RPGs, to play with friends over the internet.
+
+HOW TO PLAY
+1. Open DadosDestino.exe and click "Host a table".
+2. Create the room (name, number of players, public or private).
+3. At the top, use the copy button next to "Table link" and send it to your friends.
+   The eye button shows or hides the link.
+4. Friends open the link in a browser (even on a phone) and join as a player or spectator.
+5. Keep the app open while you play.
+
+The gear at the top changes the language, the color theme and the animations.
+
+Keep all folders together with the .exe. See docs\COMO-FUNCIONA.md for details.

@@ -5,9 +5,15 @@ namespace RolagemRpg;
 // link da internet (túnel da Cloudflare), então não é preciso liberar o firewall.
 public sealed class HostSession : IDisposable
 {
+    private readonly ServerConfig config;
     private WebApplication? server;
     private TunnelManager? tunnel;
     private Uri? localUri;
+
+    public HostSession(ServerConfig config)
+    {
+        this.config = config;
+    }
 
     public bool IsHosting => server is not null;
 
@@ -19,15 +25,15 @@ public sealed class HostSession : IDisposable
         }
 
         // Tenta a porta de sempre (mantém o histórico salvo); se estiver ocupada, usa outra livre.
-        foreach (var address in new[] { $"http://localhost:{Program.DefaultPort}", "http://127.0.0.1:0" })
+        foreach (var address in new[] { $"http://localhost:{config.Port}", "http://127.0.0.1:0" })
         {
             var candidateTunnel = new TunnelManager();
-            var candidate = Program.CreateServer(Array.Empty<string>(), address, candidateTunnel);
+            var candidate = ServerBuilder.Create(Array.Empty<string>(), address, config, candidateTunnel);
             try
             {
                 await candidate.StartAsync();
             }
-            catch (IOException) when (address.EndsWith($":{Program.DefaultPort}", StringComparison.Ordinal))
+            catch (IOException) when (address.EndsWith($":{config.Port}", StringComparison.Ordinal))
             {
                 candidateTunnel.Dispose();
                 await candidate.DisposeAsync();

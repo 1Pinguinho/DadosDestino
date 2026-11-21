@@ -1,0 +1,93 @@
+/*
+  Temas de cor. Cada tema só troca a paleta; contrastes, degradês e efeitos
+  continuam iguais. Usado pela mesa (site) e pela tela inicial do app.
+
+  --bg / --bg-mid / --bg-glow   fundo da página (degradê radial)
+  --surface / --surface-2       painéis e campos elevados
+  --field                       fundo dos campos de texto
+  --ink / --muted / --faint     texto principal, secundário e dicas
+  --line                        bordas
+  --accent / --accent-strong    cor do tema (detalhes e números)
+  --action / --action-hover     botões principais;  --on-action é o texto neles
+  --warm                        cor de destaque secundária (títulos pequenos)
+  --table-*                     a mesa da campanha;  --seat-* os lugares
+  --shadow                      sombras
+*/
+:root,
+[data-theme='purple'] {
+  color-scheme: dark;
+  --bg: #100e14; --bg-mid: #211828; --bg-glow: #422554;
+  --surface: #191520; --surface-2: #211a29; --field: #100e14;
+  --ink: #f0e9f4; --muted: #afa3b6; --faint: #7d7486; --line: #403347;
+  --accent: #c6a0ee; --accent-strong: #e2c7ff;
+  --action: #71469a; --action-hover: #8d5db5; --on-action: #f8f4fb;
+  --warm: #f0aa83;
+  --table-border: #725687; --table-a: #251c30; --table-b: #17131d; --table-glow: #553568;
+  --seat-a: #241b2f; --seat-b: #17141d;
+  --shadow: #09070e;
+}
+
+[data-theme='red'] {
+  color-scheme: dark;
+  --bg: #140c0d; --bg-mid: #261416; --bg-glow: #5c1f26;
+  --surface: #1d1214; --surface-2: #28181b; --field: #140c0d;
+  --ink: #f6ebeb; --muted: #c0a3a5; --faint: #8a6e70; --line: #4a2e31;
+  --accent: #f29191; --accent-strong: #ffd0cb;
+  --action: #9b2f37; --action-hover: #b8414a; --on-action: #fff6f5;
+  --warm: #f2c27e;
+  --table-border: #8a4b52; --table-a: #2e1a1d; --table-b: #1a1011; --table-glow: #6e2a32;
+  --seat-a: #2c191c; --seat-b: #1b1112;
+  --shadow: #0b0506;
+}
+
+[data-theme='green'] {
+  color-scheme: dark;
+  --bg: #0b110e; --bg-mid: #142019; --bg-glow: #1f4a33;
+  --surface: #111a15; --surface-2: #18251e; --field: #0b110e;
+  --ink: #e8f4ed; --muted: #a2b8aa; --faint: #6c8475; --line: #2d4436;
+  --accent: #8fd6a4; --accent-strong: #c9f3d5;
+  --action: #2d7a4c; --action-hover: #3a9360; --on-action: #f3fbf6;
+  --warm: #f0c283;
+  --table-border: #4d7d5d; --table-a: #182a20; --table-b: #0f1813; --table-glow: #2a5e40;
+  --seat-a: #172a1f; --seat-b: #0f1913;
+  --shadow: #040806;
+}
+
+[data-theme='gray'] {
+  color-scheme: dark;
+  --bg: #121315; --bg-mid: #1c1e22; --bg-glow: #3a3e46;
+  --surface: #191b1e; --surface-2: #222429; --field: #121315;
+  --ink: #eceef1; --muted: #a8acb4; --faint: #737882; --line: #3a3d44;
+  --accent: #b9c4d3; --accent-strong: #e4e9f0;
+  --action: #4d5664; --action-hover: #616b7b; --on-action: #f7f8fa;
+  --warm: #f0aa83;
+  --table-border: #5d6470; --table-a: #24272c; --table-b: #16181b; --table-glow: #3f4550;
+  --seat-a: #22252a; --seat-b: #17191c;
+  --shadow: #060708;
+}
+
+[data-theme='black'] {
+  color-scheme: dark;
+  --bg: #050505; --bg-mid: #0b0b0b; --bg-glow: #1f1f1f;
+  --surface: #0d0d0d; --surface-2: #161616; --field: #050505;
+  --ink: #f4f4f4; --muted: #a0a0a0; --faint: #6a6a6a; --line: #2b2b2b;
+  --accent: #e8e8e8; --accent-strong: #ffffff;
+  --action: #ececec; --action-hover: #ffffff; --on-action: #0a0a0a;
+  --warm: #d9b56a;
+  --table-border: #3d3d3d; --table-a: #151515; --table-b: #080808; --table-glow: #2a2a2a;
+  --seat-a: #151515; --seat-b: #0a0a0a;
+  --shadow: #000000;
+}
+
+[data-theme='white'] {
+  color-scheme: light;
+  --bg: #f3f0eb; --bg-mid: #f7f4f0; --bg-glow: #e5ddf0;
+  --surface: #ffffff; --surface-2: #f6f2f8; --field: #faf8fb;
+  --ink: #1f1a24; --muted: #675f6e; --faint: #9a92a0; --line: #dcd4e1;
+  --accent: #6a3fa0; --accent-strong: #4a2678;
+  --action: #5d3a8a; --action-hover: #724ba3; --on-action: #ffffff;
+  --warm: #b0521f;
+  --table-border: #cbbbd9; --table-a: #ffffff; --table-b: #f2edf6; --table-glow: #dccbef;
+  --seat-a: #ffffff; --seat-b: #f7f3fa;
+  --shadow: #5a4a6a;
+}

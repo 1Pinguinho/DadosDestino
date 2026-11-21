@@ -8,28 +8,38 @@ namespace RolagemRpg;
 
 // Janela do app. Começa na tela inicial (hospedar ou entrar numa mesa) e depois
 // mostra a mesa: a deste computador, ou a de um amigo pelo link que ele mandou.
+// Idioma e tema escolhidos em qualquer tela ficam salvos em config/preferencias.json.
 public sealed class MainWindow : Form
 {
     private const string AppTitle = "Dados & Destino";
     private const string WebView2DownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    private readonly HostSession host;
-    private readonly string launcherHtml = LoadLauncher();
-    private readonly WebView2 webView = new()
+    // Cor de fundo da janela enquanto a página carrega, por tema.
+    private static readonly Dictionary<string, Color> ThemeBackgrounds = new()
     {
-        Dock = DockStyle.Fill,
-        DefaultBackgroundColor = Color.FromArgb(16, 14, 20),
+        ["purple"] = Color.FromArgb(16, 14, 20),
+        ["red"] = Color.FromArgb(20, 12, 13),
+        ["green"] = Color.FromArgb(11, 17, 14),
+        ["white"] = Color.FromArgb(245, 242, 238),
+        ["gray"] = Color.FromArgb(18, 19, 21),
+        ["black"] = Color.FromArgb(5, 5, 5),
     };
+
+    private readonly HostSession host;
+    private readonly Preferences preferences;
+    private readonly WebView2 webView = new() { Dock = DockStyle.Fill };
     private readonly bool hostOnStart;
     private bool showingLauncher;
+    private string titleState = "launcher";
 
-    public MainWindow(HostSession host, bool hostOnStart = false)
+    public MainWindow(HostSession host, Preferences preferences, bool hostOnStart = false)
     {
         this.host = host;
+        this.preferences = preferences;
         this.hostOnStart = hostOnStart;
         Text = AppTitle;
-        BackColor = Color.FromArgb(16, 14, 20);
+        ApplyBackground();
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1280, 880);
         MinimumSize = new Size(420, 600);
@@ -45,16 +55,14 @@ public sealed class MainWindow : Form
         Load += async (_, _) => await InitializeWebViewAsync();
     }
 
+    private bool English => preferences.Language == "en";
+
     private async Task InitializeWebViewAsync()
     {
         try
         {
-            // Guarda os dados do navegador (histórico, nome do jogador) em AppData.
-            var dataFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DadosDestino",
-                "WebView2");
-            var environment = await CoreWebView2Environment.CreateAsync(null, dataFolder);
+            // Dados do navegador do app (nome do jogador, histórico) ficam em dados/navegador.
+            var environment = await CoreWebView2Environment.CreateAsync(null, AppPaths.BrowserFolder);
             await webView.EnsureCoreWebView2Async(environment);
             var core = webView.CoreWebView2;
             var settings = core.Settings;
@@ -77,6 +85,14 @@ public sealed class MainWindow : Form
             core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
             core.WebMessageReceived += OnWebMessageReceived;
             core.NavigationCompleted += OnNavigationCompleted;
+            // Assim que a mesa carrega, recebe o idioma e o tema salvos no app.
+            core.DOMContentLoaded += (_, _) =>
+            {
+                if (!showingLauncher)
+                {
+                    SendSettings();
+                }
+            };
             ShowLauncher(null);
             if (hostOnStart)
             {
@@ -86,7 +102,9 @@ public sealed class MainWindow : Form
         catch (WebView2RuntimeNotFoundException)
         {
             var install = MessageBox.Show(
-                "Este app precisa do Microsoft Edge WebView2 Runtime, que não foi encontrado.\n\nAbrir a página de download agora?",
+                English
+                    ? "This app needs the Microsoft Edge WebView2 Runtime, which was not found.\n\nOpen the download page now?"
+                    : "Este app precisa do Microsoft Edge WebView2 Runtime, que não foi encontrado.\n\nAbrir a página de download agora?",
                 AppTitle,
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -94,6 +112,11 @@ public sealed class MainWindow : Form
             {
                 OpenInDefaultBrowser(WebView2DownloadUrl);
             }
+            Close();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(exception.Message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
     }
@@ -128,30 +151,65 @@ public sealed class MainWindow : Form
             || (address.Scheme == Uri.UriSchemeHttps && host.EndsWith(".trycloudflare.com", StringComparison.OrdinalIgnoreCase));
     }
 
-    private void ShowLauncher(string? message)
+    // A tela inicial é lida de launcher/launcher.html a cada vez, já com o idioma,
+    // o tema e as cores dos temas (de site/src/themes.css).
+    private void ShowLauncher(string? messageCode, string? detail = null)
     {
         showingLauncher = true;
-        Text = AppTitle;
-        webView.CoreWebView2.NavigateToString(launcherHtml.Replace("{{MESSAGE}}", WebUtility.HtmlEncode(message ?? string.Empty)));
+        titleState = "launcher";
+        UpdateTitle();
+        string html;
+        try
+        {
+            var themes = File.Exists(ThemesFile) ? File.ReadAllText(ThemesFile) : string.Empty;
+            html = File.ReadAllText(AppPaths.LauncherFile)
+                .Replace("/*{{THEMES}}*/", themes.Replace("</", "<\\/"), StringComparison.Ordinal)
+                .Replace("{{LANG}}", preferences.Language, StringComparison.Ordinal)
+                .Replace("{{THEME}}", preferences.Theme, StringComparison.Ordinal)
+                .Replace("{{MESSAGE}}", WebUtility.HtmlEncode(messageCode ?? string.Empty), StringComparison.Ordinal)
+                .Replace("{{DETAIL}}", WebUtility.HtmlEncode(detail ?? string.Empty), StringComparison.Ordinal);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(English
+                ? $"The start screen was not found at \"{AppPaths.LauncherFile}\". Reinstall the app."
+                : $"A tela inicial não foi encontrada em \"{AppPaths.LauncherFile}\". Reinstale o app.", exception);
+        }
+        webView.CoreWebView2.NavigateToString(html);
     }
+
+    private static string ThemesFile => Path.Combine(AppPaths.SiteFolder, "src", "themes.css");
 
     private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
-        LauncherMessage? message;
+        BridgeMessage? message;
         try
         {
-            message = JsonSerializer.Deserialize<LauncherMessage>(args.WebMessageAsJson, JsonOptions);
+            message = JsonSerializer.Deserialize<BridgeMessage>(args.WebMessageAsJson, JsonOptions);
         }
         catch (JsonException)
         {
             return;
         }
 
-        // O botão "Início" da mesa volta para a tela inicial.
-        if (message?.Action == "home")
+        switch (message?.Action)
         {
-            ShowLauncher(host.IsHosting ? "Sua mesa continua no ar enquanto o app estiver aberto." : null);
-            return;
+            // Idioma e tema: só valores da lista são aceitos, de qualquer tela.
+            case "settings":
+                if (preferences.Apply(message.Language, message.Theme))
+                {
+                    preferences.Save();
+                    ApplyBackground();
+                    UpdateTitle();
+                }
+                return;
+            case "getSettings":
+                SendSettings();
+                return;
+            // O botão "Início" da mesa volta para a tela inicial.
+            case "home":
+                ShowLauncher(host.IsHosting ? "HOSTING_STILL_ON" : null);
+                return;
         }
 
         // Hospedar e entrar só valem quando pedidos pela própria tela inicial,
@@ -169,17 +227,18 @@ public sealed class MainWindow : Form
         {
             if (TryNormalizeLink(message.Link, out var link) && !IsTableAddress(link))
             {
-                SendLauncherError("Por segurança, o app só abre links de mesa (terminados em trycloudflare.com). Confira o link que o anfitrião mandou.");
+                SendLauncherError("NOT_TABLE_LINK");
             }
             else if (link is not null)
             {
                 showingLauncher = false;
-                Text = $"{AppTitle}  ·  Mesa de um amigo";
+                titleState = "friend";
+                UpdateTitle();
                 webView.CoreWebView2.Navigate(link.ToString());
             }
             else
             {
-                SendLauncherError("Esse link não parece certo. Cole o link inteiro que o anfitrião mandou.");
+                SendLauncherError("BAD_LINK");
             }
         }
     }
@@ -190,12 +249,13 @@ public sealed class MainWindow : Form
         {
             var address = await host.StartAsync();
             showingLauncher = false;
-            Text = $"{AppTitle}  ·  Hospedando a mesa (deixe o app aberto)";
+            titleState = "hosting";
+            UpdateTitle();
             webView.CoreWebView2.Navigate(address.ToString());
         }
         catch (Exception exception)
         {
-            SendLauncherError($"Não foi possível hospedar a mesa: {exception.Message}");
+            SendLauncherError("HOST_FAILED", exception.Message);
         }
     }
 
@@ -205,11 +265,34 @@ public sealed class MainWindow : Form
         {
             return;
         }
-        ShowLauncher("Não foi possível abrir a mesa. Confira o link e se o anfitrião está com o app aberto.");
+        ShowLauncher("OPEN_FAILED");
     }
 
-    private void SendLauncherError(string error) =>
-        webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { error }));
+    private void SendSettings() =>
+        webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            settings = new { language = preferences.Language, theme = preferences.Theme },
+        }));
+
+    private void SendLauncherError(string error, string? detail = null) =>
+        webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { error, detail }));
+
+    private void UpdateTitle()
+    {
+        Text = titleState switch
+        {
+            "hosting" => $"{AppTitle}  ·  {(English ? "Hosting the table (keep the app open)" : "Hospedando a mesa (deixe o app aberto)")}",
+            "friend" => $"{AppTitle}  ·  {(English ? "A friend's table" : "Mesa de um amigo")}",
+            _ => AppTitle,
+        };
+    }
+
+    private void ApplyBackground()
+    {
+        var color = ThemeBackgrounds.TryGetValue(preferences.Theme, out var found) ? found : ThemeBackgrounds["purple"];
+        BackColor = color;
+        webView.DefaultBackgroundColor = color;
+    }
 
     private static bool TryNormalizeLink(string? text, out Uri link)
     {
@@ -233,14 +316,6 @@ public sealed class MainWindow : Form
         return true;
     }
 
-    private static string LoadLauncher()
-    {
-        using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream("launcher.html")
-            ?? throw new InvalidOperationException("Tela inicial não encontrada no app.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
-
     private static void OpenInDefaultBrowser(string url)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
@@ -249,5 +324,5 @@ public sealed class MainWindow : Form
         }
     }
 
-    private sealed record LauncherMessage(string? Action, string? Link);
+    private sealed record BridgeMessage(string? Action, string? Link, string? Language, string? Theme);
 }

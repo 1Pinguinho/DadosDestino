@@ -112,7 +112,7 @@ public sealed class HubRateLimitFilter : IHubFilter
             }
             if (++state.Calls > MaxCallsPerWindow)
             {
-                throw new HubException("Muitas ações em pouco tempo. Espere alguns segundos.");
+                throw new HubException("TOO_MANY_ACTIONS");
             }
             if (now - state.FailedJoinWindowStart > FailedJoinWindow)
             {
@@ -121,7 +121,7 @@ public sealed class HubRateLimitFilter : IHubFilter
             }
             if (isJoin && state.FailedJoins >= MaxFailedJoins)
             {
-                throw new HubException("Muitas tentativas com código errado. Espere alguns minutos.");
+                throw new HubException("TOO_MANY_WRONG_CODES");
             }
         }
 
@@ -146,7 +146,7 @@ public sealed class HubRateLimitFilter : IHubFilter
         {
             if (state.Connections >= MaxConnectionsPerClient)
             {
-                throw new HubException("Conexões demais vindas do mesmo lugar.");
+                throw new HubException("TOO_MANY_CONNECTIONS");
             }
             state.Connections++;
         }

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="purple">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100e14" />
+    <meta name="description" content="Uma mesa de rolagem de dados para suas aventuras de RPG." />
+    <meta name="referrer" content="no-referrer" />
+    <script src="/src/boot.js"></script>
+    <link rel="stylesheet" href="/vendor/fonts/fonts.css" />
+    <link rel="stylesheet" href="/src/themes.css" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <title>Dados & Destino | Rolagem de RPG</title>
+  </head>
+  <body>
+    <svg width="0" height="0" class="icon-sprite" aria-hidden="true">
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18" /><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" /></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 15.7" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8.3" /><path d="M21 3v5.3h-5.3M3 21v-5.3h5.3" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></symbol>
+    </svg>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#inicio" data-i18n-aria="brand.home">
+          <span class="brand-mark" aria-hidden="true">D<span>20</span></span>
+          <span class="brand-name">DADOS <i>&</i> DESTINO</span>
+        </a>
+        <div class="topbar-actions">
+          <div id="host-chip" class="host-chip" role="status" aria-live="polite" hidden>
+            <span class="host-chip-dot" aria-hidden="true"></span>
+            <span id="host-chip-text" class="host-chip-text"></span>
+            <code id="host-chip-link" class="host-chip-link" hidden></code>
+            <button id="host-chip-reveal" class="icon-button" type="button" hidden><svg class="icon"><use href="#i-eye" /></svg></button>
+            <button id="host-chip-copy" class="icon-button" type="button" hidden><svg class="icon"><use href="#i-copy" /></svg></button>
+            <button id="host-chip-retry" class="icon-button" type="button" hidden><svg class="icon"><use href="#i-refresh" /></svg></button>
+          </div>
+          <div class="table-status"><span id="connection-dot" class="status-dot"></span><span id="connection-status" data-i18n="status.connecting">CONECTANDO</span></div>
+          <button id="app-home" class="app-home" type="button" data-i18n="app.home" hidden>INÍCIO</button>
+          <div class="settings-anchor">
+            <button id="settings-toggle" class="icon-button settings-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-panel" data-i18n-aria="settings.open" data-i18n-title="settings.open"><svg class="icon"><use href="#i-gear" /></svg></button>
+            <div id="settings-panel" class="settings-panel" role="dialog" aria-labelledby="settings-title" hidden>
+              <div class="settings-head">
+                <strong id="settings-title" data-i18n="settings.title">Configurações</strong>
+                <button id="settings-close" class="settings-close" type="button" data-i18n-aria="settings.close">×</button>
+              </div>
+              <span class="field-label" data-i18n="settings.language">IDIOMA</span>
+              <div class="segmented" role="group">
+                <button type="button" data-language="pt-BR" aria-pressed="true">Português (BR)</button>
+                <button type="button" data-language="en" aria-pressed="false">English</button>
+              </div>
+              <span class="field-label" data-i18n="settings.theme">TEMA</span>
+              <div id="theme-options" class="theme-options" role="group"></div>
+              <div class="settings-row">
+                <span class="field-label" data-i18n="settings.animations">ANIMAÇÕES DOS DADOS</span>
+                <button id="motion-toggle" class="switch" type="button" aria-pressed="true">Ligadas</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="inicio" class="workspace">
+        <!-- Antes de entrar numa sala: criar, entrar com código ou procurar -->
+        <section id="lobby" class="lobby" aria-labelledby="lobby-title">
+          <div class="lobby-hero">
+            <p class="chapter" data-i18n="lobby.chapter">SUA PRÓXIMA AVENTURA COMEÇA AQUI</p>
+            <h1 id="lobby-title"><span data-i18n="lobby.title1">Role os dados.</span><br /><em data-i18n="lobby.title2">Decida o destino.</em></h1>
+          </div>
+
+          <div class="lobby-card">
+            <div class="lobby-identity">
+              <span class="field-label" data-i18n="lobby.identity">QUEM É VOCÊ</span>
+              <div class="identity-fields">
+                <label class="room-field" for="player-name"><span data-i18n="lobby.name">SEU NOME</span>
+                  <input id="player-name" type="text" maxlength="22" autocomplete="name" data-i18n-placeholder="lobby.namePlaceholder" />
+                </label>
+                <label class="room-field" for="character-name"><span id="character-label" data-i18n="lobby.character">PERSONAGEM</span>
+                  <input id="character-name" type="text" maxlength="30" autocomplete="off" data-i18n-placeholder="lobby.characterPlaceholder" />
+                </label>
+              </div>
+            </div>
+
+            <div class="lobby-tabs" role="tablist">
+              <button id="tab-create" type="button" role="tab" aria-selected="true" aria-controls="panel-create" data-tab="create" data-i18n="lobby.tabCreate">Criar sala</button>
+              <button id="tab-join" type="button" role="tab" aria-selected="false" aria-controls="panel-join" data-tab="join" data-i18n="lobby.tabJoin">Entrar com código</button>
+              <button id="tab-search" type="button" role="tab" aria-selected="false" aria-controls="panel-search" data-tab="search" data-i18n="lobby.tabSearch">Procurar salas</button>
+            </div>
+
+            <form id="panel-create" class="lobby-panel" role="tabpanel" aria-labelledby="tab-create">
+              <label class="room-field" for="room-name"><span data-i18n="create.roomName">NOME DA SALA</span>
+                <input id="room-name" type="text" maxlength="40" autocomplete="off" data-i18n-placeholder="create.roomNamePlaceholder" />
+              </label>
+              <div class="create-grid">
+                <div>
+                  <span class="field-label" data-i18n="create.maxPlayers">JOGADORES</span>
+                  <div class="stepper">
+                    <button id="max-players-down" type="button" data-i18n-aria="create.fewer">−</button>
+                    <output id="max-players" aria-live="polite">6</output>
+                    <button id="max-players-up" type="button" data-i18n-aria="create.more">+</button>
+                  </div>
+                </div>
+                <div>
+                  <span class="field-label" data-i18n="create.visibility">VISIBILIDADE</span>
+                  <div id="create-visibility" class="segmented" role="group">
+                    <button type="button" data-public="true" aria-pressed="true"><svg class="icon"><use href="#i-globe" /></svg><span data-i18n="create.public">Pública</span></button>
+                    <button type="button" data-public="false" aria-pressed="false"><svg class="icon"><use href="#i-lock" /></svg><span data-i18n="create.private">Privada</span></button>
+                  </div>
+                </div>
+              </div>
+              <p id="visibility-hint" class="field-hint" data-i18n="create.publicHint">Aparece na busca de salas deste servidor.</p>
+              <label class="check-row" for="allow-spectators">
+                <input id="allow-spectators" type="checkbox" checked />
+                <span><strong data-i18n="create.spectators">Permitir espectadores</strong><small data-i18n="create.spectatorsHint">Assistem às rolagens públicas sem ocupar vaga.</small></span>
+              </label>
+              <button class="room-button room-button-primary lobby-submit" type="submit" data-i18n="create.submit">Criar sala</button>
+            </form>
+
+            <form id="panel-join" class="lobby-panel" role="tabpanel" aria-labelledby="tab-join" hidden>
+              <label class="room-field" for="room-code"><span data-i18n="join.code">CÓDIGO DA SALA</span>
+                <input id="room-code" class="code-input" type="text" maxlength="6" autocomplete="off" spellcheck="false" data-i18n-placeholder="join.codePlaceholder" />
+              </label>
+              <span class="field-label" data-i18n="join.role">ENTRAR COMO</span>
+              <div id="join-role" class="segmented" role="group">
+                <button type="button" data-spectator="false" aria-pressed="true" data-i18n="join.player">Jogador</button>
+                <button type="button" data-spectator="true" aria-pressed="false" data-i18n="join.spectator">Espectador</button>
+              </div>
+              <p class="field-hint" data-i18n="join.spectatorHint">Espectador não precisa de personagem e não rola dados.</p>
+              <button class="room-button room-button-primary lobby-submit" type="submit" data-i18n="join.submit">Entrar</button>
+            </form>
+
+            <div id="panel-search" class="lobby-panel" role="tabpanel" aria-labelledby="tab-search" hidden>
+              <div class="search-row">
+                <label class="search-field">
+                  <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+                  <input id="room-search" type="search" maxlength="40" autocomplete="off" spellcheck="false" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.placeholder" />
+                </label>
+                <button id="room-search-refresh" class="icon-button icon-button-boxed" type="button" data-i18n-aria="search.refresh" data-i18n-title="search.refresh"><svg class="icon"><use href="#i-refresh" /></svg></button>
+              </div>
+              <p class="field-hint" data-i18n="search.scope">Salas públicas abertas neste servidor.</p>
+              <ul id="room-results" class="room-results"></ul>
+              <p id="room-results-empty" class="room-results-empty"></p>
+            </div>
+
+            <p id="lobby-feedback" class="room-feedback" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <!-- Dentro da sala -->
+        <section class="page-heading" aria-labelledby="page-title">
+          <div class="eyebrow"><span data-i18n="page.eyebrow">COMPÊNDIO DA MESA</span><span class="eyebrow-line"></span><span data-i18n="page.volume">VOL. 01</span></div>
+          <div class="intro-row">
+            <div>
+              <p class="chapter" data-i18n="lobby.chapter">SUA PRÓXIMA AVENTURA COMEÇA AQUI</p>
+              <h1 id="page-title"><span id="room-heading">Role os dados.</span><br /><em data-i18n="lobby.title2">Decida o destino.</em></h1>
+            </div>
+            <div class="d20-stamp" aria-hidden="true"><span>20</span><small data-i18n="page.natural">NATURAL</small></div>
+          </div>
+        </section>
+
+        <section class="party-table" aria-labelledby="table-title">
+          <div class="table-head">
+            <div>
+              <p class="chapter" data-i18n="table.chapter">MESA DA CAMPANHA</p>
+              <h2 id="table-title" data-i18n="table.title">Aventureiros</h2>
+            </div>
+            <div class="table-head-actions">
+              <span id="party-table-count" class="table-count"></span>
+              <button id="clear-table-focus" class="table-focus-clear" type="button" data-i18n="table.clearFocus">SEM FOCO</button>
+            </div>
+          </div>
+          <div id="party-seats" class="party-seats"></div>
+        </section>
+
+        <section class="roller" aria-labelledby="page-title">
+          <p id="spectator-note" class="spectator-note" data-i18n="room.watching" hidden></p>
+          <form id="roll-form" class="roll-form">
+            <label class="field-label" for="notation" data-i18n="roller.notation">NOTAÇÃO</label>
+            <div class="notation-row">
+              <input id="notation" name="notation" type="text" value="1d20" maxlength="120" autocomplete="off" spellcheck="false" aria-describedby="roll-feedback" />
+              <button class="roll-button" type="submit"><span aria-hidden="true">✳</span> <b data-i18n="roller.roll">Rolar</b></button>
+            </div>
+            <p id="roll-feedback" class="feedback" role="status" aria-live="polite"></p>
+
+            <div class="control-row">
+              <fieldset class="die-picker">
+                <legend class="field-label" data-i18n="roller.die">DADO</legend>
+                <div class="die-options" role="group" data-i18n-aria="roller.dieGroup">
+                  <button type="button" class="die-option" data-sides="4">d4</button>
+                  <button type="button" class="die-option" data-sides="6">d6</button>
+                  <button type="button" class="die-option" data-sides="8">d8</button>
+                  <button type="button" class="die-option" data-sides="10">d10</button>
+                  <button type="button" class="die-option" data-sides="12">d12</button>
+                  <button type="button" class="die-option is-selected" data-sides="20" aria-pressed="true">d20</button>
+                  <button type="button" class="die-option" data-sides="100">d100</button>
+                </div>
+              </fieldset>
+              <div class="number-field">
+                <label class="field-label" for="quantity" data-i18n="roller.quantity">QUANTIDADE</label>
+                <input id="quantity" type="number" min="1" max="100" value="1" inputmode="numeric" />
+              </div>
+              <div class="number-field modifier-field">
+                <label class="field-label" for="modifier" data-i18n="roller.modifier">MODIFICADOR</label>
+                <input id="modifier" type="number" min="-999" max="999" value="0" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div class="quick-rolls">
+              <span class="field-label" data-i18n="roller.shortcuts">ATALHOS</span>
+              <div class="quick-options">
+                <button type="button" data-quick="1d20+5"><span data-i18n="roller.perception">Percepção</span> <b>+5</b></button>
+                <button type="button" data-quick="2d20kh1"><span data-i18n="roller.advantage">Vantagem</span> <b>2d20</b></button>
+                <button type="button" data-quick="2d20kl1"><span data-i18n="roller.disadvantage">Desvantagem</span> <b>2d20</b></button>
+              </div>
+            </div>
+
+            <div id="table-roll-controls" class="table-roll-controls" hidden>
+              <label class="table-target-label" for="roll-target"><span data-i18n="roller.target">ROLAR NA MESA</span>
+                <select id="roll-target"></select>
+              </label>
+              <div id="roll-visibility" class="roll-visibility" role="group" data-i18n-aria="roller.visibility" hidden>
+                <button type="button" data-visibility="public" aria-pressed="true" data-i18n="roller.public">PÚBLICA</button>
+                <button type="button" data-visibility="private" aria-pressed="false" data-i18n="roller.private">PRIVADA</button>
+              </div>
+            </div>
+          </form>
+
+          <aside class="notation-guide" aria-labelledby="guide-title">
+            <p id="guide-title" class="chapter" data-i18n="guide.title">COMO ESCREVER OS DADOS</p>
+            <dl class="guide-list">
+              <div><dt><button type="button" data-example="1d20">1d20</button></dt><dd data-i18n="guide.basic">Um dado de 20 lados. O número antes do "d" é a quantidade.</dd></div>
+              <div><dt><button type="button" data-example="3d6+2">3d6+2</button></dt><dd data-i18n="guide.modifier">Soma ou subtrai um valor do total.</dd></div>
+              <div><dt><button type="button" data-example="2d20kh1">2d20kh1</button></dt><dd data-i18n="guide.kh">Vantagem: rola 2 e fica com o maior (kh = keep highest).</dd></div>
+              <div><dt><button type="button" data-example="2d20kl1">2d20kl1</button></dt><dd data-i18n="guide.kl">Desvantagem: rola 2 e fica com o menor (kl = keep lowest).</dd></div>
+              <div><dt><button type="button" data-example="4d6dl1">4d6dl1</button></dt><dd data-i18n="guide.dl">Descarta o menor (dl = drop lowest). Bom para atributos.</dd></div>
+              <div><dt><button type="button" data-example="1d6!">1d6!</button></dt><dd data-i18n="guide.explode">Explosivo: tirou o máximo, rola de novo e soma.</dd></div>
+              <div><dt><button type="button" data-example="1d10r&lt;3">1d10r&lt;3</button></dt><dd data-i18n="guide.reroll">Rola de novo resultados menores que 3.</dd></div>
+              <div><dt><button type="button" data-example="1d%">1d%</button></dt><dd data-i18n="guide.percent">Percentual, de 1 a 100 (igual a 1d100).</dd></div>
+              <div><dt><button type="button" data-example="4dF">4dF</button></dt><dd data-i18n="guide.fate">Dados Fate: cada um dá −, 0 ou +.</dd></div>
+            </dl>
+            <p class="field-hint" data-i18n="guide.tip">Clique num exemplo para usá-lo.</p>
+          </aside>
+
+          <div class="footer-note"><span data-i18n="roller.footerLeft">FEITO PARA A MESA</span><span class="footer-sigil">✳</span><span data-i18n="roller.footerRight">QUE A SORTE ESTEJA CONTIGO</span></div>
+        </section>
+
+        <div class="right-rail">
+          <section id="room-panel" class="room-panel" aria-labelledby="room-title">
+            <div class="room-kicker"><span class="chapter" data-i18n="room.kicker">MESA AO VIVO</span><span id="room-connection-state"></span></div>
+            <div class="room-title-row">
+              <h2 id="room-title"></h2>
+              <span id="room-visibility-badge" class="badge"></span>
+            </div>
+            <div class="room-code-row">
+              <span class="room-label" data-i18n="room.code">CÓDIGO</span>
+              <strong id="active-room-code"></strong>
+              <button id="copy-room-link" class="icon-button" type="button" data-i18n-aria="room.copyInvite" data-i18n-title="room.copyInvite"><svg class="icon"><use href="#i-copy" /></svg></button>
+            </div>
+
+            <div class="players-heading"><span data-i18n="room.players">JOGADORES</span><span id="player-count">0 / 0</span></div>
+            <ul id="player-list" class="player-list"></ul>
+            <div id="spectator-block" hidden>
+              <div class="players-heading"><span data-i18n="room.spectators">ESPECTADORES</span><span id="spectator-count">0</span></div>
+              <ul id="spectator-list" class="player-list spectator-list"></ul>
+            </div>
+
+            <details id="room-settings" class="room-settings" hidden>
+              <summary data-i18n="room.settings">CONFIGURAR SALA</summary>
+              <form id="room-settings-form">
+                <label class="room-field" for="settings-room-name"><span data-i18n="create.roomName">NOME DA SALA</span>
+                  <input id="settings-room-name" type="text" maxlength="40" autocomplete="off" />
+                </label>
+                <span class="field-label" data-i18n="create.maxPlayers">JOGADORES</span>
+                <div class="stepper">
+                  <button id="settings-max-down" type="button" data-i18n-aria="create.fewer">−</button>
+                  <output id="settings-max-players">6</output>
+                  <button id="settings-max-up" type="button" data-i18n-aria="create.more">+</button>
+                </div>
+                <div id="settings-visibility" class="segmented" role="group">
+                  <button type="button" data-public="true" aria-pressed="true"><svg class="icon"><use href="#i-globe" /></svg><span data-i18n="create.public">Pública</span></button>
+                  <button type="button" data-public="false" aria-pressed="false"><svg class="icon"><use href="#i-lock" /></svg><span data-i18n="create.private">Privada</span></button>
+                </div>
+                <label class="check-row" for="settings-spectators">
+                  <input id="settings-spectators" type="checkbox" />
+                  <span><strong data-i18n="create.spectators">Permitir espectadores</strong></span>
+                </label>
+                <button class="room-button room-button-primary" type="submit" data-i18n="room.save">Salvar</button>
+              </form>
+            </details>
+
+            <button id="leave-room" class="leave-button" type="button" data-i18n="room.leave">SAIR DA SALA</button>
+            <p id="room-feedback" class="room-feedback" role="status" aria-live="polite"></p>
+          </section>
+
+          <aside class="history" aria-labelledby="history-title">
+            <div class="history-heading">
+              <div>
+                <p class="chapter" data-i18n="history.chapter">REGISTRO DE CAMPANHA</p>
+                <h2 id="history-title" data-i18n="history.title">Histórico</h2>
+              </div>
+              <button id="clear-history" class="clear-button" type="button" data-i18n="history.clear" data-i18n-aria="history.clearLabel">LIMPAR</button>
+            </div>
+            <div class="history-rule"></div>
+            <ol id="history-list" class="history-list" data-i18n-aria="history.list"></ol>
+            <p id="history-empty" class="history-empty" data-i18n="history.empty">As rolagens desta sessão vão aparecer aqui.</p>
+            <div class="history-footer"><span class="status-dot"></span> <span id="history-count"></span></div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <script src="/vendor/signalr.min.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
