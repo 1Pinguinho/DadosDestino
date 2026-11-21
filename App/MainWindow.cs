@@ -56,10 +56,158 @@ public sealed class MainWindow : Form
             // Sem ícone próprio: usa o padrão do Windows.
         }
         Controls.Add(webView);
+        FormBorderStyle = FormBorderStyle.None;
+        Padding = new Padding(ResizeGrip);
+        Resize += (_, _) => UpdateChrome();
+        // Abre em tela cheia se foi assim que a pessoa deixou.
+        Shown += (_, _) => ApplyFullscreen();
         Load += async (_, _) => await InitializeWebViewAsync();
     }
 
     private bool English => preferences.Language == "en";
+
+    // ---------- janela sem a moldura do Windows ----------
+    // A barra de título (arrastar, minimizar, maximizar, fechar) é desenhada pela
+    // página, na cor do tema. A janela só cuida das bordas para redimensionar,
+    // de maximizar sem cobrir a barra de tarefas e da tela cheia.
+    private const int ResizeGrip = 5;
+    private bool isFullscreen;
+    private FormWindowState stateBeforeFullscreen = FormWindowState.Normal;
+
+    // Tela cheia sem bordas: ocupa o monitor inteiro, por cima da barra de tarefas.
+    // Desligar volta ao tamanho de antes.
+    private void ApplyFullscreen()
+    {
+        if (preferences.Fullscreen == isFullscreen)
+        {
+            return;
+        }
+        isFullscreen = preferences.Fullscreen;
+        if (isFullscreen)
+        {
+            stateBeforeFullscreen = WindowState;
+            WindowState = FormWindowState.Normal;
+            WindowState = FormWindowState.Maximized;
+        }
+        else
+        {
+            WindowState = FormWindowState.Normal;
+            if (stateBeforeFullscreen == FormWindowState.Maximized)
+            {
+                WindowState = FormWindowState.Maximized;
+            }
+        }
+        UpdateChrome();
+    }
+
+    private void UpdateChrome()
+    {
+        // Borda fina na cor do tema só com a janela solta (é por ela que se redimensiona).
+        Padding = WindowState == FormWindowState.Normal && !isFullscreen ? new Padding(ResizeGrip) : Padding.Empty;
+        SendWindowState();
+    }
+
+    private void SendWindowState() =>
+        webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            window = new { maximized = WindowState == FormWindowState.Maximized, fullscreen = isFullscreen },
+        }));
+
+    private void WindowCommand(string? command)
+    {
+        switch (command)
+        {
+            case "minimize":
+                WindowState = FormWindowState.Minimized;
+                break;
+            case "maximize":
+                if (isFullscreen)
+                {
+                    preferences.Fullscreen = false;
+                    preferences.Save();
+                    ApplyFullscreen();
+                    SendSettings();
+                }
+                else
+                {
+                    WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                }
+                break;
+            case "close":
+                Close();
+                break;
+        }
+    }
+
+    private const int WmNcHitTest = 0x0084;
+    private const int WmGetMinMaxInfo = 0x0024;
+
+    protected override void WndProc(ref Message message)
+    {
+        // Bordas e cantos da janela solta: redimensionar com o mouse.
+        if (message.Msg == WmNcHitTest && WindowState == FormWindowState.Normal && !isFullscreen)
+        {
+            base.WndProc(ref message);
+            var lParam = message.LParam.ToInt64();
+            var point = PointToClient(new Point((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF)));
+            var left = point.X <= ResizeGrip;
+            var right = point.X >= ClientSize.Width - ResizeGrip;
+            var top = point.Y <= ResizeGrip;
+            var bottom = point.Y >= ClientSize.Height - ResizeGrip;
+            var hit = (top, bottom, left, right) switch
+            {
+                (true, _, true, _) => 13,  // canto superior esquerdo
+                (true, _, _, true) => 14,  // canto superior direito
+                (_, true, true, _) => 16,  // canto inferior esquerdo
+                (_, true, _, true) => 17,  // canto inferior direito
+                (true, _, _, _) => 12,
+                (_, true, _, _) => 15,
+                (_, _, true, _) => 10,
+                (_, _, _, true) => 11,
+                _ => 0,
+            };
+            if (hit != 0)
+            {
+                message.Result = hit;
+            }
+            return;
+        }
+
+        base.WndProc(ref message);
+
+        // Maximizar ocupa só a área livre (sem cobrir a barra de tarefas), a não ser na tela cheia.
+        if (message.Msg == WmGetMinMaxInfo && !isFullscreen)
+        {
+            var screen = Screen.FromHandle(Handle);
+            var info = System.Runtime.InteropServices.Marshal.PtrToStructure<MinMaxInfo>(message.LParam);
+            info.MaxPosition = new NativePoint(screen.WorkingArea.Left - screen.Bounds.Left, screen.WorkingArea.Top - screen.Bounds.Top);
+            info.MaxSize = new NativePoint(screen.WorkingArea.Width, screen.WorkingArea.Height);
+            System.Runtime.InteropServices.Marshal.StructureToPtr(info, message.LParam, false);
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+
+        public NativePoint(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public NativePoint Reserved;
+        public NativePoint MaxSize;
+        public NativePoint MaxPosition;
+        public NativePoint MinTrackSize;
+        public NativePoint MaxTrackSize;
+    }
 
     private async Task InitializeWebViewAsync()
     {
@@ -77,6 +225,8 @@ public sealed class MainWindow : Form
             settings.IsPasswordAutosaveEnabled = false;
             settings.IsGeneralAutofillEnabled = false;
             settings.AreDevToolsEnabled = false;
+            // A barra de título da página pode arrastar a janela (CSS app-region: drag).
+            settings.IsNonClientRegionSupportEnabled = true;
             core.NewWindowRequested += (_, args) =>
             {
                 args.Handled = true;
@@ -221,8 +371,17 @@ public sealed class MainWindow : Form
                         preferences.Save();
                         ApplyBackground();
                         UpdateTitle();
+                        ApplyFullscreen();
                     }
                 }
+                return;
+            // F11 em qualquer tela liga ou desliga a tela cheia.
+            case "toggleFullscreen":
+                preferences.Fullscreen = !preferences.Fullscreen;
+                preferences.Save();
+                ApplyFullscreen();
+                SendSettings();
+                SendWindowState();
                 return;
             // A tela inicial só troca o idioma.
             case "language":
@@ -233,8 +392,16 @@ public sealed class MainWindow : Form
                     UpdateTitle();
                 }
                 return;
+            // Botões da barra de título desenhada pela página.
+            case "getWindow":
+                SendWindowState();
+                return;
+            case "window":
+                WindowCommand(message.Command);
+                return;
             case "getSettings":
                 SendSettings();
+                SendWindowState();
                 return;
             // O botão "Início" da mesa volta para a tela inicial.
             case "home":
@@ -353,5 +520,5 @@ public sealed class MainWindow : Form
         }
     }
 
-    private sealed record BridgeMessage(string? Action, string? Link, string? Language, JsonElement? Settings);
+    private sealed record BridgeMessage(string? Action, string? Link, string? Language, JsonElement? Settings, string? Command);
 }

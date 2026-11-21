@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
@@ -8,11 +8,11 @@
     <AssemblyName>DadosDestino</AssemblyName>
     <RootNamespace>RolagemRpg</RootNamespace>
     <Product>Dados &amp; Destino</Product>
-    <Version>1.3.0</Version>
-    <!-- O pacote do WebView2 traz uma referência de WPF que este app não usa. -->
+    <Version>1.4.0</Version>
+    <!-- O pacote do WebView2 traz uma referÃªncia de WPF que este app nÃ£o usa. -->
     <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
-    <!-- Não é um site do IIS: dispensa o web.config. -->
+    <!-- NÃ£o Ã© um site do IIS: dispensa o web.config. -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
 
@@ -23,7 +23,7 @@
   <!--
     O app sai em pastas, ao lado do DadosDestino.exe:
       site/      a mesa (HTML, CSS, JS)      launcher/  a tela inicial
-      docs/      como o app funciona        config/ e dados/ são criadas quando o app abre
+      docs/      como o app funciona        config/ e dados/ sÃ£o criadas quando o app abre
   -->
   <ItemGroup>
     <Content Remove="site\**;launcher\**;docs\**" />
@@ -32,7 +32,7 @@
     <None Include="launcher\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <None Include="docs\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <None Include="LEIA-ME.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-    <!-- Arquivos dos testes em Node não fazem parte do app. -->
+    <!-- Arquivos dos testes em Node nÃ£o fazem parte do app. -->
     <Content Remove="package.json;tests\**" />
     <None Remove="tests\**" />
   </ItemGroup>

@@ -71,7 +71,8 @@ public sealed record ServerLimits(int MaxPlayersPerRoom, int MaxSpectatorsPerRoo
 // Um dado da rolagem, para os outros verem a mesma animação (lados -1 = dado Fate).
 public sealed record RollDie(int Sides, double Value, double Natural, bool Used);
 
-public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor);
+public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor, string DiceStyle);
 
 // DiceColor: a cor dos dados de quem rolou ("classic" = uma cor por tipo de dado).
-public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor);
+// DiceStyle: o modelo dos dados (formato e símbolos), um da lista em TableHub.DiceStyles.
+public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor, string? DiceStyle);

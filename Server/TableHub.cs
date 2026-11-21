@@ -15,6 +15,9 @@ public sealed class TableHub : Hub
     public static readonly string[] PlayerColors =
         { "violet", "rose", "amber", "sky", "emerald", "crimson", "teal", "gold", "blue", "slate" };
     private static readonly HashSet<string> DiceColors = new(PlayerColors.Append("classic"), StringComparer.Ordinal);
+    // Modelos de dados (o site tem os mesmos nomes).
+    public static readonly string[] DiceStyles =
+        { "classic", "crystal", "metal", "neon", "rune", "galaxy", "lava", "ice", "wood", "pixel", "dragon", "bone" };
 
     // Dados personalizados: "custom:#borda:#inicio:#fim" (cores em hexadecimal).
     private static readonly System.Text.RegularExpressions.Regex CustomDice =
@@ -274,7 +277,8 @@ public sealed class TableHub : Hub
                 roll.IsPrivate,
                 roll.Dice?.ToArray() ?? Array.Empty<RollDie>(),
                 roll.ExtraDice,
-                ValidDiceColor(roll.DiceColor));
+                ValidDiceColor(roll.DiceColor),
+                roll.DiceStyle is not null && DiceStyles.Contains(roll.DiceStyle) ? roll.DiceStyle : "classic");
 
             room.Rolls.Add(sharedRoll);
             if (room.Rolls.Count > MaxRollHistory)

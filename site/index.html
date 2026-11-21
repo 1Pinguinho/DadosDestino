@@ -26,6 +26,16 @@
       <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></symbol>
     </svg>
 
+    <!-- Barra de título do app (só aparece dentro do app; a do Windows fica escondida) -->
+    <div id="app-titlebar" class="app-titlebar" hidden>
+      <span class="titlebar-brand"><span class="titlebar-mark" aria-hidden="true">D20</span><span id="titlebar-title">Dados &amp; Destino</span></span>
+      <div class="titlebar-buttons">
+        <button type="button" data-window="minimize" data-i18n-aria="window.minimize" data-i18n-title="window.minimize"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5h8" /></svg></button>
+        <button type="button" data-window="maximize" data-i18n-aria="window.maximize" data-i18n-title="window.maximize"><svg viewBox="0 0 12 12" aria-hidden="true"><rect class="icon-max" x="2.5" y="2.5" width="7" height="7" /><path class="icon-restore" d="M4 2.5h5.5V8M2.5 4h5.5v5.5H2.5z" /></svg></button>
+        <button type="button" data-window="close" class="is-close" data-i18n-aria="window.close" data-i18n-title="window.close"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
+      </div>
+    </div>
+
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="#inicio" data-i18n-aria="brand.home">
@@ -60,35 +70,59 @@
                 </section>
 
                 <section class="settings-section">
-                  <span class="field-label" data-i18n="settings.theme">TEMA</span>
-                  <div id="theme-options" class="theme-options" role="group"></div>
-                  <div id="custom-colors" class="custom-colors" hidden>
-                    <label><input type="color" data-custom="bg" /><span data-i18n="settings.customBg">Fundo</span></label>
-                    <label><input type="color" data-custom="accent" /><span data-i18n="settings.customAccent">Destaque</span></label>
-                    <label><input type="color" data-custom="glow" /><span data-i18n="settings.customGlow">Degradê</span></label>
-                  </div>
+                  <details class="settings-fold" data-fold="theme">
+                    <summary><span class="field-label" data-i18n="settings.theme">TEMA</span><span class="fold-current"><span class="fold-swatch theme-swatch" id="theme-current-swatch"></span><span id="theme-current"></span></span></summary>
+                    <div class="fold-body">
+                      <div id="theme-options" class="theme-options" role="group"></div>
+                      <div id="custom-colors" class="custom-colors" hidden>
+                        <label><input type="color" data-custom="bg" /><span data-i18n="settings.customBg">Fundo</span></label>
+                        <label><input type="color" data-custom="accent" /><span data-i18n="settings.customAccent">Destaque</span></label>
+                        <label><input type="color" data-custom="glow" /><span data-i18n="settings.customGlow">Degradê</span></label>
+                      </div>
+                    </div>
+                  </details>
                 </section>
 
-                <section class="settings-section settings-row">
-                  <span class="field-label" data-i18n="settings.zoom">ZOOM</span>
-                  <div class="zoom-control">
-                    <button id="zoom-out" type="button" data-i18n-aria="settings.zoomOut">−</button>
-                    <output id="zoom-value">100%</output>
-                    <button id="zoom-in" type="button" data-i18n-aria="settings.zoomIn">+</button>
-                    <button id="zoom-reset" class="icon-button" type="button" data-i18n-aria="settings.zoomReset" data-i18n-title="settings.zoomReset"><svg class="icon"><use href="#i-refresh" /></svg></button>
+                <section class="settings-section">
+                  <div class="settings-row">
+                    <span class="field-label" data-i18n="settings.zoom">ZOOM</span>
+                    <div class="zoom-control">
+                      <button id="zoom-out" type="button" data-i18n-aria="settings.zoomOut">−</button>
+                      <output id="zoom-value">100%</output>
+                      <button id="zoom-in" type="button" data-i18n-aria="settings.zoomIn">+</button>
+                      <button id="zoom-reset" class="icon-button" type="button" data-i18n-aria="settings.zoomReset" data-i18n-title="settings.zoomReset"><svg class="icon"><use href="#i-refresh" /></svg></button>
+                    </div>
+                  </div>
+                  <div class="settings-row">
+                    <span class="field-label" data-i18n="settings.fullscreen">TELA CHEIA (F11)</span>
+                    <button id="fullscreen-toggle" class="switch" type="button" aria-pressed="false">Desligado</button>
                   </div>
                 </section>
 
                 <section class="settings-section">
-                  <span class="field-label" data-i18n="settings.seatColor">COR DA SUA MESA</span>
-                  <div id="seat-color-options" class="color-options" role="group"></div>
-                  <span class="field-label" data-i18n="settings.diceColor">COR DOS SEUS DADOS</span>
-                  <div id="dice-color-options" class="color-options" role="group"></div>
-                  <div id="dice-custom" class="custom-colors" hidden>
-                    <label><input type="color" data-dice="edge" /><span data-i18n="settings.diceEdge">Borda</span></label>
-                    <label><input type="color" data-dice="from" /><span data-i18n="settings.diceFrom">Início</span></label>
-                    <label><input type="color" data-dice="to" /><span data-i18n="settings.diceTo">Fim</span></label>
-                  </div>
+                  <details class="settings-fold" data-fold="seat-color">
+                    <summary><span class="field-label" data-i18n="settings.seatColor">COR DA SUA MESA</span><span class="fold-current"><span class="fold-swatch color-dot" id="seat-color-current-swatch"></span><span id="seat-color-current"></span></span></summary>
+                    <div class="fold-body">
+                      <div id="seat-color-options" class="color-options" role="group"></div>
+                    </div>
+                  </details>
+                  <details class="settings-fold" data-fold="dice-style">
+                    <summary><span class="field-label" data-i18n="settings.diceStyle">MODELO DOS SEUS DADOS</span><span class="fold-current" id="dice-style-current"></span></summary>
+                    <div class="fold-body">
+                      <div id="dice-style-options" class="dice-style-options" role="group"></div>
+                    </div>
+                  </details>
+                  <details class="settings-fold" data-fold="dice-color">
+                    <summary><span class="field-label" data-i18n="settings.diceColor">COR DOS SEUS DADOS</span><span class="fold-current"><span class="fold-swatch color-dot" id="dice-color-current-swatch"></span><span id="dice-color-current"></span></span></summary>
+                    <div class="fold-body">
+                      <div id="dice-color-options" class="color-options" role="group"></div>
+                      <div id="dice-custom" class="custom-colors" hidden>
+                        <label><input type="color" data-dice="edge" /><span data-i18n="settings.diceEdge">Borda</span></label>
+                        <label><input type="color" data-dice="from" /><span data-i18n="settings.diceFrom">Início</span></label>
+                        <label><input type="color" data-dice="to" /><span data-i18n="settings.diceTo">Fim</span></label>
+                      </div>
+                    </div>
+                  </details>
                 </section>
 
                 <section class="settings-section">

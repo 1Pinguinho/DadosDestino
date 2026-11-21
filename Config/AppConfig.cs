@@ -44,11 +44,14 @@ public sealed class Preferences
     public CustomColors Custom { get; set; } = new();
     public double Zoom { get; set; } = 1;
     public bool Animations { get; set; } = true;
+    // Tela cheia sem bordas (F11 também liga e desliga).
+    public bool Fullscreen { get; set; }
     public bool Sound { get; set; } = true;
     // Volume baixo por padrão, para não assustar quem usa equalizador ou volume alto.
     public int Volume { get; set; } = 20;
     public string? SeatColor { get; set; }
     public string DiceColor { get; set; } = "classic";
+    public string DiceStyle { get; set; } = "classic";
     public DiceColors DiceCustom { get; set; } = new();
     public List<Shortcut>? Shortcuts { get; set; }
 
@@ -71,10 +74,12 @@ public sealed class Preferences
         Custom = incoming.Custom;
         Zoom = incoming.Zoom;
         Animations = incoming.Animations;
+        Fullscreen = incoming.Fullscreen;
         Sound = incoming.Sound;
         Volume = incoming.Volume;
         SeatColor = incoming.SeatColor;
         DiceColor = incoming.DiceColor;
+        DiceStyle = incoming.DiceStyle;
         DiceCustom = incoming.DiceCustom;
         Shortcuts = incoming.Shortcuts;
         return before != JsonSerializer.Serialize(this);
@@ -98,6 +103,7 @@ public sealed class Preferences
         Volume = Math.Clamp(Volume, 0, 100);
         SeatColor = SeatColor is not null && Colors.Contains(SeatColor) ? SeatColor : null;
         DiceColor = DiceColor is "classic" or "custom" || Colors.Contains(DiceColor) ? DiceColor : "classic";
+        DiceStyle = TableHub.DiceStyles.Contains(DiceStyle) ? DiceStyle : "classic";
         DiceCustom ??= new DiceColors();
         DiceCustom.Edge = HexColor.IsMatch(DiceCustom.Edge ?? string.Empty) ? DiceCustom.Edge!.ToLowerInvariant() : DiceColors.DefaultEdge;
         DiceCustom.From = HexColor.IsMatch(DiceCustom.From ?? string.Empty) ? DiceCustom.From!.ToLowerInvariant() : DiceColors.DefaultFrom;

@@ -4,11 +4,13 @@ import { DiceRoll } from '/vendor/rpg-dice-roller.mjs';
 import { t, errorCode, errorText, formatTime } from './i18n.js';
 import { createRoomManager } from './rooms.js';
 import { createDiceAnimator, packDice } from './dice-animation.js';
-import { diceColorValue, initSettings } from './settings.js';
+import { diceColorValue, getSettings, initSettings } from './settings.js';
 import { playLand, playOutcome } from './sound.js';
 import { initShortcuts } from './shortcuts.js';
+import { initTitlebar } from './titlebar.js';
 
 initSettings();
+initTitlebar();
 
 const historyKey = 'dados-destino-history-v1';
 const form = document.querySelector('#roll-form');
@@ -67,7 +69,7 @@ function mergeHistory(entries) {
 // ---------- mesa da campanha ----------
 
 function animationSource(roll) {
-  return { dice: roll.dice || [], extraDice: roll.extraDice || 0, total: roll.total, diceColor: roll.diceColor || 'classic' };
+  return { dice: roll.dice || [], extraDice: roll.extraDice || 0, total: roll.total, diceColor: roll.diceColor || 'classic', diceStyle: roll.diceStyle || 'classic' };
 }
 
 function createSeat(playerId) {
@@ -93,7 +95,7 @@ function createSeat(playerId) {
   name.className = 'seat-name';
   presence.className = 'seat-presence';
   actions.className = 'seat-actions';
-  stage.className = 'seat-stage';
+  stage.className = 'seat-stage dice-skin';
   stage.setAttribute('aria-hidden', 'true');
   waiting.className = 'seat-waiting';
   foot.className = 'seat-foot';
@@ -403,6 +405,7 @@ function rollDice(notation) {
     isPrivate: rollContext.isPrivate,
     roomCode: partyState.code,
     diceColor: diceColorValue(),
+    diceStyle: getSettings().diceStyle,
     ...packDice(roll),
   };
   showFeedback();

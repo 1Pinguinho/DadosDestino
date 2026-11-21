@@ -12,8 +12,10 @@ DadosDestino/
 │   │   ├── main.js            rolagens, mesa da campanha e histórico
 │   │   ├── rooms.js           salas: criar, entrar, procurar, espectadores, convite
 │   │   ├── dice-animation.js  animação dos dados
+│   │   ├── dice-shapes.js     desenho de cada dado (faces lapidadas) e dos materiais
 │   │   ├── shortcuts.js       atalhos de rolagem (padrões e os criados pelo jogador)
 │   │   ├── sound.js           som dos dados (gerado na hora, sem arquivos de áudio)
+│   │   ├── titlebar.js        barra de título do app, na cor do tema
 │   │   ├── i18n.js            troca de idioma
 │   │   ├── settings.js        configurações: tema, cores, zoom, som, volume, atalhos
 │   │   ├── palette.js         monta o tema personalizado a partir de 3 cores
@@ -61,7 +63,9 @@ Ficam na engrenagem do topo e são salvas sozinhas, para cada pessoa:
 | Tema | roxo; há 10 prontos e o **personalizado**, em que você escolhe fundo, destaque e degradê |
 | Zoom | 100% (de 70% a 150%) |
 | Cor da sua mesa | automática (todos na sala veem a cor escolhida) |
-| Cor dos seus dados | clássico, uma cor por tipo de dado (todos veem) |
+| Modelo dos seus dados | clássico; há 12 materiais (cristal, metal, neon, pedra rúnica, galáxia, lava, gelo, madeira, pixel, dragão, osso), com as faces lapidadas de cada tipo de dado, e todos aceitam qualquer cor (todos veem) |
+| Cor dos seus dados | clássico, uma cor por tipo de dado; ou uma das prontas, ou personalizada com borda e degradê (todos veem) |
+| Tela cheia | desligada; no app é sem bordas, e o F11 liga e desliga |
 | Animações | ligadas |
 | Som dos dados | ligado, com **volume em 20%** para não assustar |
 | Atalhos | Percepção, Vantagem, Desvantagem e os que você criar (até 12) |
@@ -90,8 +94,6 @@ padrão, menos o idioma e os atalhos.
   tira da sala; **Remover e bloquear** também impede a volta dela (pelo IP) àquela sala.
 - **Voltar para a vaga:** quem fecha o navegador sem querer e abre o mesmo link de novo volta
   como a mesma pessoa, na mesma mesa.
-- **Jackpot:** 3 ou mais dados com o mesmo número, ou um total com 3 dígitos iguais (111, 777),
-  fazem uma animação de jackpot. Só vale com dados rolados; conta pura, como `100+11`, não conta.
 
 ## Mudando textos, cores e visual
 

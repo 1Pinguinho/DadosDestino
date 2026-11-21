@@ -323,30 +323,18 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .roll-dice { position: relative; z-index: 1; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .seat-stage.is-fumble .roll-dice { animation: fumble-shake .5s ease-in-out; }
 .roll-die { position: relative; width: 58px; height: 58px; display: grid; place-items: center; filter: drop-shadow(0 9px 10px color-mix(in srgb, var(--shadow) 65%, transparent)); animation: die-tumble var(--tumble, 820ms) cubic-bezier(.22,.75,.3,1) var(--delay, 0ms) both; }
-.roll-die-body { position: absolute; inset: 0; clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%); background: linear-gradient(142deg, #b386d8, #6a4887 48%, #33263f); box-shadow: inset 0 3px 8px #ffffff55, inset 0 -8px 14px #00000066; }
 .roll-die-face { position: relative; z-index: 1; color: #fff3ff; font: 600 21px/1 var(--serif); text-shadow: 0 1px 3px #160c20; }
 .roll-die-label { position: absolute; z-index: 1; bottom: 7px; left: 0; right: 0; color: #fff3ffaa; font: 6px var(--mono); letter-spacing: .6px; text-align: center; }
 .roll-die:not(.is-landed) .roll-die-face { opacity: .7; filter: blur(.5px); }
-.roll-die[data-shape='4'] .roll-die-body { clip-path: polygon(50% 3%, 98% 93%, 2% 93%); background: linear-gradient(145deg, #f1c49f, #b7744f 48%, #4f2e25); }
 .roll-die[data-shape='4'] .roll-die-face { padding-top: 14px; font-size: 18px; }
 .roll-die[data-shape='4'] .roll-die-label { bottom: 6px; }
-.roll-die[data-shape='6'] .roll-die-body { clip-path: inset(6% round 16%); background: linear-gradient(145deg, #a9bde6, #55639a 48%, #2a2b45); }
-.roll-die[data-shape='8'] .roll-die-body { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: linear-gradient(145deg, #f0bfdc, #a35a86 48%, #452238); }
-.roll-die[data-shape='10'] .roll-die-body,
-.roll-die[data-shape='100'] .roll-die-body { clip-path: polygon(50% 0, 98% 42%, 50% 100%, 2% 42%); background: linear-gradient(145deg, #a7e0d6, #3f8a86 48%, #1d3b3d); }
-.roll-die[data-shape='12'] .roll-die-body { clip-path: polygon(50% 0, 98% 36%, 80% 96%, 20% 96%, 2% 36%); background: linear-gradient(145deg, #c9e2a4, #6d8f43 48%, #2d3b20); }
-.roll-die[data-shape='20'] .roll-die-body { background: linear-gradient(145deg, #e0a891, #9a5f7f 46%, #4b3157); }
-.roll-die[data-shape='fate'] .roll-die-body { clip-path: inset(8% round 20%); }
 .roll-die[data-shape='100'] .roll-die-face { font-size: 17px; }
 .roll-die.is-landed .roll-die-face { animation: face-pop .34s cubic-bezier(.2,1.5,.4,1) both; }
-.roll-die.is-landed .roll-die-body { animation: die-flash .45s ease-out; }
-.roll-die.is-dropped .roll-die-body, .roll-die.is-dropped .roll-die-face, .roll-die.is-dropped .roll-die-label { opacity: .38; }
+.roll-die.is-dropped .roll-die-face, .roll-die.is-dropped .roll-die-label, .roll-die.is-dropped .die-svg { opacity: .38; }
 .roll-die.is-dropped .roll-die-face { text-decoration: line-through; }
 .roll-die.is-natural-max { filter: drop-shadow(0 0 14px #ffc75fbb) drop-shadow(0 9px 10px #08060daa); }
-.roll-die.is-natural-max .roll-die-body { background: linear-gradient(145deg, #ffe9b0, #e1a54c 46%, #8a5524); }
 .roll-die.is-natural-max .roll-die-face, .roll-die.is-natural-max .roll-die-label { color: #3b230c; text-shadow: none; }
 .roll-die.is-natural-min { filter: drop-shadow(0 0 12px #ff6b5c99) drop-shadow(0 9px 10px #08060daa); }
-.roll-die.is-natural-min .roll-die-body { background: linear-gradient(145deg, #f09a8c, #a23d48 46%, #4a1d2a); }
 .roll-more { color: var(--muted); font: 11px var(--mono); }
 .roll-total { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 10px; opacity: 0; transform: translateY(8px); transition: opacity .25s ease, transform .25s ease; }
 .roll-total.is-visible { opacity: 1; transform: none; }
@@ -507,12 +495,6 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 .player-seat[data-color] .seat-name { text-decoration: underline 2px color-mix(in srgb, var(--hue-color, var(--accent)) 55%, transparent); text-underline-offset: 5px; }
 .player-seat.is-focused[data-color] { border-color: var(--hue-color, var(--accent)); }
 
-/* Dados na cor escolhida por quem rolou ("classic" mantém uma cor por tipo). */
-.seat-stage[data-dice-color]:not([data-dice-color='classic']):not([data-dice-color='custom']) .roll-die .roll-die-body {
-  background: linear-gradient(145deg, color-mix(in srgb, var(--hue-color) 55%, #fff), color-mix(in srgb, var(--hue-color) 78%, #000) 48%, color-mix(in srgb, var(--hue-color) 35%, #000));
-}
-.seat-stage .roll-die.is-natural-max .roll-die-body { background: linear-gradient(145deg, #ffe9b0, #e1a54c 46%, #8a5524); }
-.seat-stage .roll-die.is-natural-min .roll-die-body { background: linear-gradient(145deg, #f09a8c, #a23d48 46%, #4a1d2a); }
 
 /* Jackpot: 3 ou mais dados com o mesmo número. */
 .seat-stage.is-jackpot::before { position: absolute; inset: 0 8%; z-index: 0; background: radial-gradient(ellipse at 50% 45%, #ffd86a40, transparent 70%); content: ''; pointer-events: none; animation: crit-glow 1.6s ease-out both; }
@@ -570,10 +552,169 @@ html.reduce-motion .roll-die.is-match, html.reduce-motion .seat-stage.is-jackpot
 
 /* Dados personalizados: degradê por dentro, borda e número legível. */
 .color-dot[data-swatch='custom'] { background: linear-gradient(135deg, #8e5bd6, #2b1d45); box-shadow: inset 0 0 0 2px #ffd86a; }
-.seat-stage[data-dice-color='custom'] .roll-die .roll-die-body { background: linear-gradient(145deg, var(--dice-from), var(--dice-to)); box-shadow: inset 0 3px 8px #ffffff40, inset 0 -8px 14px #00000055; }
-.seat-stage[data-dice-color='custom'] .roll-die { filter: drop-shadow(1.5px 0 0 var(--dice-edge)) drop-shadow(-1.5px 0 0 var(--dice-edge)) drop-shadow(0 1.5px 0 var(--dice-edge)) drop-shadow(0 -1.5px 0 var(--dice-edge)) drop-shadow(0 9px 10px #08060daa); }
-.seat-stage[data-dice-color='custom'] .roll-die-face { color: var(--dice-ink); text-shadow: none; }
-.seat-stage[data-dice-color='custom'] .roll-die-label { color: color-mix(in srgb, var(--dice-ink) 70%, transparent); }
-.seat-stage[data-dice-color='custom'] .roll-die.is-natural-max .roll-die-face, .seat-stage[data-dice-color='custom'] .roll-die.is-natural-min .roll-die-face { color: #3b230c; }
-.seat-stage[data-dice-color='custom'] .roll-die.is-natural-min .roll-die-face { color: #fff3ff; }
-.seat-stage[data-dice-color='custom'] .roll-die.is-match { filter: drop-shadow(1.5px 0 0 var(--dice-edge)) drop-shadow(-1.5px 0 0 var(--dice-edge)) drop-shadow(0 1.5px 0 var(--dice-edge)) drop-shadow(0 -1.5px 0 var(--dice-edge)) drop-shadow(0 0 12px #ffd86acc); }
+
+/* Escolha do modelo nas configurações: um d20 parado em cada modelo, na sua cor. */
+.dice-style-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.dice-style { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--field); color: var(--muted); cursor: pointer; transition: border-color .16s, color .16s; }
+.dice-style:hover { border-color: var(--accent-line); color: var(--ink); }
+.dice-style[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.dice-style-name { font-size: 9px; line-height: 1.2; }
+.dice-preview { position: relative; display: grid; place-items: center; width: 40px; height: 40px; }
+.dice-preview .roll-die { width: 36px; height: 36px; filter: drop-shadow(0 3px 4px #0006); }
+.dice-preview .roll-die, .dice-preview .roll-die * { animation: none !important; }
+.dice-preview .roll-die-face { font-size: 12px; }
+.dice-preview .roll-die-label { bottom: 3px; font-size: 5px; }
+
+/* Número ímpar de jogadores: a última mesa fica centralizada embaixo (Mesa 1 | Mesa 2 / Mesa 3). */
+.party-seats > .player-seat:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
+@media (max-width: 540px) {
+  .party-seats > .player-seat:last-child:nth-child(odd) { width: 100%; }
+}
+
+/* ---------- barra de título do app (no lugar da do Windows) ---------- */
+.app-titlebar { position: sticky; z-index: 50; top: 0; height: 34px; display: flex; align-items: center; justify-content: space-between; padding-left: 12px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg-mid) 70%, var(--surface)); color: var(--muted); -webkit-user-select: none; user-select: none; app-region: drag; -webkit-app-region: drag; }
+.titlebar-brand { min-width: 0; display: flex; align-items: center; gap: 9px; overflow: hidden; font: 10px var(--mono); letter-spacing: .8px; white-space: nowrap; text-overflow: ellipsis; }
+.titlebar-mark { width: 18px; height: 19px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--accent); color: var(--accent); font: 700 6px var(--mono); clip-path: polygon(50% 0, 94% 23%, 87% 78%, 50% 100%, 12% 78%, 6% 23%); }
+.titlebar-buttons { height: 100%; display: flex; app-region: no-drag; -webkit-app-region: no-drag; }
+.titlebar-buttons button { width: 46px; height: 100%; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s; }
+.titlebar-buttons button:hover { background: var(--accent-soft); color: var(--ink); }
+.titlebar-buttons button.is-close:hover { background: #d93a45; color: #fff; }
+.titlebar-buttons svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.titlebar-buttons .icon-restore, .app-titlebar.is-maximized .icon-max { display: none; }
+.app-titlebar.is-maximized .icon-restore { display: inline; }
+html.has-titlebar .settings-panel { max-height: calc(100vh - 144px); }
+
+/* ---------- seções recolhíveis do painel ---------- */
+.settings-fold { border-radius: 5px; }
+.settings-fold + .settings-fold { margin-top: 2px; }
+.settings-fold summary { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 4px; cursor: pointer; list-style: none; }
+.settings-fold summary::-webkit-details-marker { display: none; }
+.settings-fold summary:hover { background: var(--accent-soft); }
+.settings-fold summary::after { margin-left: 4px; color: var(--faint); content: '\25B8'; font-size: 10px; transition: transform .16s; }
+.settings-fold[open] summary::after { transform: rotate(90deg); }
+.settings-fold summary .field-label { flex: 1; margin: 0; }
+.fold-current { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 11px; }
+.fold-swatch { width: 14px; height: 14px; flex: 0 0 auto; aspect-ratio: auto; max-width: none; border-width: 1px; pointer-events: none; }
+.fold-swatch.theme-swatch { border-color: transparent; transform: none; }
+.fold-body { display: flex; flex-direction: column; gap: 8px; padding: 6px 2px 4px; animation: reveal .16s ease-out both; }
+
+/* ---------- desenho dos dados (SVG facetado) e materiais ----------
+   --die-base é a cor do dado (por tipo, a escolhida ou a personalizada). Cada material
+   define os tons das faces (--f-*), a borda (--edge) e a cor do número (--ink). */
+.roll-die {
+  --die-base: #9a7ac0;
+  --die-base-2: color-mix(in srgb, var(--die-base) 55%, #000);
+  --f-light: color-mix(in srgb, var(--die-base) 68%, #fff);
+  --f-mid: var(--die-base);
+  --f-front: color-mix(in srgb, var(--die-base) 84%, #fff);
+  --f-dark: color-mix(in srgb, var(--die-base) 50%, var(--die-base-2));
+  --f-darker: var(--die-base-2);
+  --f-stroke: color-mix(in srgb, var(--die-base) 35%, #fff);
+  --f-stroke-width: .7;
+  --f-opacity: 1;
+  --edge: var(--die-edge, color-mix(in srgb, var(--die-base-2) 65%, #000));
+  --edge-width: 2.4;
+  --ink: var(--dice-ink, #fffaff);
+  --ink-shadow: 0 1px 3px #0009;
+}
+.die-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.die-facet { stroke: var(--f-stroke); stroke-width: var(--f-stroke-width); stroke-opacity: .45; stroke-linejoin: round; fill-opacity: var(--f-opacity); }
+.f-light { fill: var(--f-light); }
+.f-mid { fill: var(--f-mid); }
+.f-front { fill: var(--f-front); }
+.f-dark { fill: var(--f-dark); }
+.f-darker { fill: var(--f-darker); }
+.die-outline { fill: none; stroke: var(--edge); stroke-width: var(--edge-width); stroke-linejoin: round; }
+.roll-die-face { color: var(--ink); text-shadow: var(--ink-shadow); }
+.roll-die-label { color: color-mix(in srgb, var(--ink) 65%, transparent); }
+.roll-die.is-landed .die-svg { animation: die-flash .45s ease-out; }
+
+/* Cor clássica: uma por tipo de dado. */
+.roll-die[data-shape='4'] { --die-base: #cf8a5c; }
+.roll-die[data-shape='6'] { --die-base: #6f84c8; }
+.roll-die[data-shape='8'] { --die-base: #c46d9e; }
+.roll-die[data-shape='10'], .roll-die[data-shape='100'] { --die-base: #4aa39b; }
+.roll-die[data-shape='12'] { --die-base: #84a857; }
+.roll-die[data-shape='20'] { --die-base: #b0678a; }
+.roll-die[data-shape='fate'] { --die-base: #8a8aa6; }
+.roll-die[data-shape='10'] .roll-die-face, .roll-die[data-shape='100'] .roll-die-face { padding-bottom: 8px; }
+.roll-die[data-shape='20'] .roll-die-face { padding-top: 6px; font-size: 19px; }
+
+/* Cor escolhida (uma da lista) ou personalizada (degradê do início ao fim e borda). */
+.dice-skin[data-dice-color]:not([data-dice-color='classic']):not([data-dice-color='custom']) .roll-die { --die-base: var(--hue-color); }
+.dice-skin[data-dice-color='custom'] .roll-die { --die-base: var(--dice-from); --die-base-2: var(--dice-to); --die-edge: var(--dice-edge); }
+
+/* 20 natural e 1 natural mudam a cor do dado. */
+.roll-die.roll-die.is-natural-max { --die-base: #e6a94a; --die-base-2: #8a5524; --ink: #3b230c; --ink-shadow: none; filter: drop-shadow(0 0 14px #ffc75fbb) drop-shadow(0 9px 10px #08060daa); }
+.roll-die.roll-die.is-natural-min { --die-base: #c4475a; --die-base-2: #4a1d2a; filter: drop-shadow(0 0 12px #ff6b5c99) drop-shadow(0 9px 10px #08060daa); }
+
+/* Cristal: translúcido, arestas claras e um brilho. */
+.dice-skin[data-dice-style='crystal'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 45%, #fff); --f-front: color-mix(in srgb, var(--die-base) 70%, #fff); --f-opacity: .62; --f-stroke: #fff; --f-stroke-width: .9; --edge: var(--die-edge, color-mix(in srgb, var(--die-base) 40%, #fff)); --edge-width: 1.8; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--die-base) 45%, transparent)) drop-shadow(0 9px 10px #08060d88); }
+.die-gleam { fill: #fff; opacity: .5; }
+.die-sparkle { fill: #fff; opacity: .9; }
+
+/* Metal: aço escovado, número gravado. */
+.dice-skin[data-dice-style='metal'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 25%, #f2f3f6); --f-mid: color-mix(in srgb, var(--die-base) 35%, #9b9ca6); --f-front: color-mix(in srgb, var(--die-base) 30%, #d8dae0); --f-dark: color-mix(in srgb, var(--die-base) 35%, #4c4d56); --f-darker: color-mix(in srgb, var(--die-base) 30%, #26272e); --f-stroke: #fff; --edge: var(--die-edge, #1b1b22); --ink: color-mix(in srgb, var(--die-base) 22%, #0c0c11); --ink-shadow: 0 1px 0 #ffffffc0; }
+.tex-brush { fill: #fff; opacity: .09; }
+
+/* Neon: corpo escuro, arestas e número brilhando na cor escolhida. */
+.dice-skin[data-dice-style='neon'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 20%, #07070c); --f-mid: color-mix(in srgb, var(--die-base) 14%, #07070c); --f-front: color-mix(in srgb, var(--die-base) 16%, #07070c); --f-dark: color-mix(in srgb, var(--die-base) 9%, #07070c); --f-darker: color-mix(in srgb, var(--die-base) 6%, #07070c); --f-stroke: var(--die-base); --f-stroke-width: 1.1; --edge: var(--die-edge, var(--die-base)); --edge-width: 3; --ink: color-mix(in srgb, var(--die-base) 35%, #fff); --ink-shadow: 0 0 6px var(--die-base), 0 0 14px var(--die-base); filter: drop-shadow(0 0 6px var(--die-base)) drop-shadow(0 0 16px color-mix(in srgb, var(--die-base) 45%, transparent)); }
+.dice-skin[data-dice-style='neon'] .die-facet { stroke-opacity: .9; }
+
+/* Pedra rúnica: pedra salpicada e runa no lugar do tipo do dado. */
+.dice-skin[data-dice-style='rune'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 22%, #a9a8a2); --f-mid: color-mix(in srgb, var(--die-base) 22%, #85847e); --f-front: color-mix(in srgb, var(--die-base) 20%, #97968f); --f-dark: color-mix(in srgb, var(--die-base) 22%, #5f5e59); --f-darker: color-mix(in srgb, var(--die-base) 20%, #45443f); --f-stroke: #00000080; --edge: var(--die-edge, #2c2b27); --ink: color-mix(in srgb, var(--die-base) 40%, #fff6e0); --ink-shadow: 0 0 6px var(--die-base), 0 1px 1px #000; }
+.dice-skin[data-dice-style='rune'] .roll-die-face { font-family: Georgia, serif; }
+.tex-dark { fill: #000; opacity: .22; }
+.tex-light { fill: #fff; opacity: .18; }
+
+/* Galáxia: espaço profundo com nebulosa e estrelas. */
+.dice-skin[data-dice-style='galaxy'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 28%, #0e0b24); --f-mid: color-mix(in srgb, var(--die-base) 20%, #0b0920); --f-front: color-mix(in srgb, var(--die-base) 24%, #0d0a22); --f-dark: color-mix(in srgb, var(--die-base) 14%, #08061a); --f-darker: color-mix(in srgb, var(--die-base) 10%, #050412); --f-stroke: color-mix(in srgb, var(--die-base) 60%, #fff); --edge: var(--die-edge, color-mix(in srgb, var(--die-base) 55%, #000)); --ink: #fff; --ink-shadow: 0 0 8px var(--die-base); }
+.neb-a { stop-color: var(--die-base); stop-opacity: .55; }
+.neb-b { stop-color: #6b2fa8; stop-opacity: .22; }
+.neb-c { stop-color: #000; stop-opacity: 0; }
+.die-star { fill: #fff; opacity: .85; }
+
+/* Lava: rocha escura com rachaduras incandescentes. */
+.dice-skin[data-dice-style='lava'] .roll-die { --f-light: #2c1812; --f-mid: #22120d; --f-front: #26140f; --f-dark: #180c09; --f-darker: #110806; --f-stroke: color-mix(in srgb, var(--die-base) 45%, #ff8a3d); --f-stroke-width: 1.2; --edge: var(--die-edge, #0b0504); --ink: color-mix(in srgb, var(--die-base) 30%, #ffd27a); --ink-shadow: 0 0 8px #ff7a2a, 0 0 2px #000; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--die-base) 40%, #ff6a1a)) drop-shadow(0 9px 10px #08060daa); }
+.dice-skin[data-dice-style='lava'] .die-facet { stroke-opacity: .85; }
+.die-crack-glow { fill: none; stroke: color-mix(in srgb, var(--die-base) 40%, #ffb347); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; animation: lava-pulse 1.8s ease-in-out infinite; }
+@keyframes lava-pulse { 50% { opacity: .55; } }
+
+/* Gelo: claro, gelado, com marcas de geada. */
+.dice-skin[data-dice-style='ice'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 12%, #ffffff); --f-mid: color-mix(in srgb, var(--die-base) 22%, #d7eefb); --f-front: color-mix(in srgb, var(--die-base) 16%, #eef8ff); --f-dark: color-mix(in srgb, var(--die-base) 28%, #b2d6ec); --f-darker: color-mix(in srgb, var(--die-base) 30%, #8fbcd8); --f-opacity: .92; --f-stroke: #fff; --edge: var(--die-edge, color-mix(in srgb, var(--die-base) 40%, #6fa6c8)); --edge-width: 2; --ink: color-mix(in srgb, var(--die-base) 50%, #12324a); --ink-shadow: 0 1px 0 #ffffffa0; filter: drop-shadow(0 0 8px #bfe7ff80) drop-shadow(0 9px 10px #08060d88); }
+.tex-frost { fill: none; stroke: #fff; stroke-width: .6; opacity: .6; }
+
+/* Madeira: veios na cor escolhida. */
+.dice-skin[data-dice-style='wood'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 22%, #b97a45); --f-mid: color-mix(in srgb, var(--die-base) 22%, #9a6234); --f-front: color-mix(in srgb, var(--die-base) 20%, #a86d3c); --f-dark: color-mix(in srgb, var(--die-base) 22%, #6e4322); --f-darker: color-mix(in srgb, var(--die-base) 20%, #563219); --f-stroke: #2a1608; --edge: var(--die-edge, #3a200d); --ink: #f6e6cc; --ink-shadow: 0 1px 2px #000c; }
+.tex-grain { fill: none; stroke: #3a200d; stroke-width: .7; opacity: .35; }
+.tex-grain.thin { stroke-width: .4; }
+
+/* Pixel: 8 bits, contorno grosso e número quadrado. */
+.dice-skin[data-dice-style='pixel'] .die-svg { shape-rendering: crispEdges; }
+.dice-skin[data-dice-style='pixel'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 75%, #fff); --f-front: var(--die-base); --f-stroke-width: 0; --edge: var(--die-edge, #111); --edge-width: 5; --ink: #fff; --ink-shadow: 2px 2px 0 #000; }
+.dice-skin[data-dice-style='pixel'] .die-outline { stroke-linejoin: miter; }
+.dice-skin[data-dice-style='pixel'] .roll-die-face, .dice-skin[data-dice-style='pixel'] .roll-die-label { font-family: var(--mono); font-weight: 700; }
+.tex-scan { fill: #000; opacity: .2; }
+
+/* Dragão: escamas e acabamento dourado. */
+.dice-skin[data-dice-style='dragon'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 60%, #2d3a20); --f-mid: color-mix(in srgb, var(--die-base) 55%, #1c2a14); --f-front: color-mix(in srgb, var(--die-base) 58%, #24321a); --f-dark: color-mix(in srgb, var(--die-base) 45%, #101a0b); --f-darker: color-mix(in srgb, var(--die-base) 35%, #0a1107); --f-stroke: #e6c35a; --edge: var(--die-edge, #d9b356); --edge-width: 3; --ink: #f6d77e; --ink-shadow: 0 1px 2px #000, 0 0 6px #c8952f; }
+.tex-scale { fill: none; stroke: #000; stroke-width: .8; opacity: .4; }
+
+/* Osso: marfim envelhecido com rachaduras. */
+.dice-skin[data-dice-style='bone'] .roll-die { --f-light: color-mix(in srgb, var(--die-base) 12%, #f6efdc); --f-mid: color-mix(in srgb, var(--die-base) 15%, #e3d7b8); --f-front: color-mix(in srgb, var(--die-base) 12%, #ece2c8); --f-dark: color-mix(in srgb, var(--die-base) 18%, #c7b893); --f-darker: color-mix(in srgb, var(--die-base) 20%, #ad9c74); --f-stroke: #6b5a3c; --edge: var(--die-edge, #6b5a3c); --ink: #3a2c1a; --ink-shadow: 0 1px 0 #fff8; }
+.die-crack { fill: none; stroke: #4a3a22; stroke-width: .9; opacity: .55; stroke-linecap: round; }
+
+/* Runas no lugar de "D6", "D20"... na pedra rúnica. */
+.dice-skin[data-dice-style='rune'] .roll-die-label { font-size: 0; }
+.dice-skin[data-dice-style='rune'] .roll-die-label::after { font-size: 9px; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='4'] .roll-die-label::after { content: '\16A0'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='6'] .roll-die-label::after { content: '\16A2'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='8'] .roll-die-label::after { content: '\16A6'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='10'] .roll-die-label::after { content: '\16A8'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='12'] .roll-die-label::after { content: '\16B1'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='20'] .roll-die-label::after { content: '\16DF'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='100'] .roll-die-label::after { content: '\16DE'; }
+.dice-skin[data-dice-style='rune'] .roll-die[data-shape='fate'] .roll-die-label::after, .dice-skin[data-dice-style='rune'] .roll-die[data-shape='other'] .roll-die-label::after { content: '\16C9'; }
+
+.dice-preview .roll-die-label::after { font-size: 6px !important; }
+html.reduce-motion .die-crack-glow { animation: none !important; }

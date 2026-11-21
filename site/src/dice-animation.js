@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { DICE_STYLES, createDieElement } from './dice-shapes.js';
 
 // Animação das rolagens, feita na mesa de quem recebe a rolagem: os dados caem
 // girando, os números embaralham até cada dado parar no valor real e, por fim,
@@ -16,20 +17,6 @@ const FATE = -1;
 // O botão "Animações" (configurações) liga/desliga a classe reduce-motion no <html>.
 function isMotionReduced() {
   return document.documentElement.classList.contains('reduce-motion');
-}
-
-function shapeOf(sides) {
-  if (sides === FATE) {
-    return 'fate';
-  }
-  return [4, 6, 8, 10, 12, 20, 100].includes(sides) ? String(sides) : 'other';
-}
-
-function labelOf(sides) {
-  if (sides === FATE) {
-    return 'DF';
-  }
-  return sides ? `D${sides}` : 'D?';
 }
 
 function faceText(sides, value) {
@@ -103,21 +90,27 @@ function cleanDice(list) {
     }));
 }
 
-// Jackpot: 3 ou mais dados que contam no total com o mesmo número (dados Fate não contam).
-function jackpotValue(dice) {
-  const counts = new Map();
-  for (const die of dice) {
-    if (die.used && die.sides !== FATE) {
-      counts.set(die.value, (counts.get(die.value) || 0) + 1);
+// Jackpot: 3 ou mais dados iguais EM SEQUÊNCIA, na ordem em que aparecem na mesa.
+// 4,4,4,6 conta; 4,4,6,4 não. Dado descartado ou Fate no meio quebra a sequência.
+// Retorna as posições dos dados que formam a sequência (vazio se não houver).
+function jackpotRun(dice) {
+  const matches = [];
+  let start = 0;
+  for (let index = 1; index <= dice.length; index += 1) {
+    const current = dice[index];
+    const first = dice[start];
+    const counts = (die) => die && die.used && die.sides !== FATE;
+    if (index < dice.length && counts(current) && counts(first) && current.value === first.value) {
+      continue;
     }
-  }
-  let best = null;
-  for (const [value, count] of counts) {
-    if (count >= 3 && (best === null || value > best)) {
-      best = value;
+    if (counts(first) && index - start >= 3) {
+      for (let position = start; position < index; position += 1) {
+        matches.push(position);
+      }
     }
+    start = index;
   }
-  return best;
+  return matches;
 }
 
 // Total com 3 ou mais dígitos iguais (111, 777, 2222...).
@@ -128,7 +121,7 @@ function isRepdigitTotal(total) {
 // Jackpot só com dados rolados (com ou sem soma, como 1d20+5); conta pura, como
 // 423-523, nunca dá jackpot porque não tem dado.
 function outcomeOf(dice, total) {
-  if (dice.length > 0 && (jackpotValue(dice) !== null || isRepdigitTotal(total))) {
+  if (dice.length > 0 && (jackpotRun(dice).length > 0 || isRepdigitTotal(total))) {
     return 'jackpot';
   }
   const d20s = dice.filter((die) => die.sides === 20 && die.used);
@@ -149,7 +142,7 @@ function brightness(hex) {
   return (0.299 * (value >> 16) + 0.587 * ((value >> 8) & 255) + 0.114 * (value & 255)) / 255;
 }
 
-function applyDiceColor(stage, diceColor) {
+export function applyDiceColor(stage, diceColor) {
   const custom = CUSTOM_DICE.exec(diceColor || '');
   for (const name of ['--dice-edge', '--dice-from', '--dice-to', '--dice-ink']) {
     stage.style.removeProperty(name);
@@ -205,16 +198,12 @@ export function createDiceAnimator(stage, hooks = {}) {
     stage.classList.remove('is-crit', 'is-fumble', 'is-jackpot');
     stage.classList.toggle('is-static', !animated);
     applyDiceColor(stage, roll.diceColor);
+    stage.dataset.diceStyle = DICE_STYLES.includes(roll.diceStyle) ? roll.diceStyle : 'classic';
 
     const tray = document.createElement('div');
     tray.className = 'roll-dice';
     const dieElements = dice.map((die, index) => {
-      const element = document.createElement('span');
-      const body = document.createElement('span');
-      const face = document.createElement('span');
-      const label = document.createElement('small');
-      element.className = 'roll-die';
-      element.dataset.shape = shapeOf(die.sides);
+      const { element, face } = createDieElement(die.sides, stage.dataset.diceStyle);
       if (animated) {
         element.style.setProperty('--tumble', `${TUMBLE_MS}ms`);
         element.style.setProperty('--delay', `${Math.min(index * STAGGER_MS, MAX_STAGGER_MS)}ms`);
@@ -224,12 +213,7 @@ export function createDiceAnimator(stage, hooks = {}) {
         element.style.setProperty('--drift', `${Math.round(randomBetween(-50, 50))}px`);
       }
       element.style.setProperty('--tilt', `${Math.round(randomBetween(-10, 10))}deg`);
-      body.className = 'roll-die-body';
-      face.className = 'roll-die-face';
       face.textContent = animated ? randomFace(die.sides) : faceText(die.sides, die.value);
-      label.className = 'roll-die-label';
-      label.textContent = labelOf(die.sides);
-      element.append(body, face, label);
       tray.append(element);
       return element;
     });
@@ -270,14 +254,9 @@ export function createDiceAnimator(stage, hooks = {}) {
       }
       if (outcome === 'jackpot') {
         // Os dados iguais pulam um depois do outro.
-        const value = jackpotValue(dice);
-        let order = 0;
-        dice.forEach((die, index) => {
-          if (die.used && die.sides !== FATE && die.value === value) {
-            dieElements[index].classList.add('is-match');
-            dieElements[index].style.setProperty('--match-delay', `${order * 90}ms`);
-            order += 1;
-          }
+        jackpotRun(dice).forEach((index, order) => {
+          dieElements[index].classList.add('is-match');
+          dieElements[index].style.setProperty('--match-delay', `${order * 90}ms`);
         });
       }
       return outcome;
