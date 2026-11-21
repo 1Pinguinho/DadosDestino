@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dados & Destino</title>
+    <!-- Nada é carregado da internet: a tela inicial usa só fontes do Windows. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'" />
+    <style>
+      :root { --ink: #f0e9f4; --muted: #afa3b6; --line: #403347; --surface: #191520; --accent: #c6a0ee; --action: #71469a; --action-hover: #8d5db5; --orange: #f0aa83; --mono: 'DM Mono', Consolas, monospace; --serif: 'Fraunces', Georgia, serif; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; display: grid; place-items: center; padding: 32px 20px; color: var(--ink); background: #100e14 radial-gradient(ellipse at 50% 8%, #422554 0, #211828 42%, #100e14 80%) fixed; font-family: 'DM Sans', 'Segoe UI', sans-serif; }
+      main { width: min(760px, 100%); }
+      .brand { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 500 11px var(--mono); letter-spacing: 1px; }
+      .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border: 1.5px solid var(--accent); color: var(--accent); font: 700 11px var(--mono); clip-path: polygon(50% 0, 94% 23%, 87% 78%, 50% 100%, 12% 78%, 6% 23%); }
+      .brand i { color: var(--orange); font-style: normal; }
+      h1 { margin: 26px 0 8px; font: 600 clamp(34px, 6vw, 50px)/1 var(--serif); }
+      h1 em { color: var(--accent); font-weight: 500; }
+      .lead { margin: 0 0 30px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+      .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .card { display: flex; flex-direction: column; gap: 12px; padding: 22px 20px 20px; border: 1px solid var(--line); border-top: 2px solid var(--accent); background: var(--surface); }
+      .card:last-child { border-top-color: var(--orange); }
+      .kicker { color: var(--orange); font: 9px var(--mono); letter-spacing: 1.2px; }
+      h2 { margin: 0; font: 500 24px var(--serif); }
+      .card p { flex: 1; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+      button { min-height: 42px; padding: 0 14px; border: 0; border-radius: 2px; background: var(--action); color: #f4f1e7; cursor: pointer; font: 600 13px 'DM Sans', 'Segoe UI', sans-serif; transition: background .18s, transform .18s; }
+      button:hover:not(:disabled) { background: var(--action-hover); transform: translateY(-1px); }
+      button:disabled { cursor: wait; opacity: .6; }
+      button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+      form { display: flex; flex-direction: column; gap: 10px; }
+      input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 2px; background: #100e14; color: var(--ink); font: 12px var(--mono); }
+      input::placeholder { color: #7d7486; }
+      .ghost { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+      .ghost:hover:not(:disabled) { border-color: var(--orange); background: transparent; color: var(--orange); }
+      .status { min-height: 20px; margin: 18px 0 0; color: var(--orange); font-size: 13px; line-height: 1.5; }
+      .hint { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font: 10px/1.7 var(--mono); letter-spacing: .3px; }
+      @media (max-width: 640px) { .choices { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">D20</span><span>DADOS <i>&</i> DESTINO</span></div>
+      <h1>Role os dados.<br /><em>Junte a mesa.</em></h1>
+      <p class="lead">Um de vocês hospeda a mesa no próprio computador. Os outros entram pelo link que ele mandar.</p>
+
+      <div class="choices">
+        <section class="card">
+          <span class="kicker">SOU O ANFITRIÃO</span>
+          <h2>Hospedar mesa</h2>
+          <p>Seu computador vira o servidor da mesa. O app gera um link da internet para você mandar aos amigos. Deixe o app aberto enquanto jogam.</p>
+          <button id="host" type="button">Hospedar mesa</button>
+        </section>
+
+        <section class="card">
+          <span class="kicker">VOU JOGAR NA MESA DE UM AMIGO</span>
+          <h2>Entrar numa mesa</h2>
+          <p>Cole o link que o anfitrião mandou.</p>
+          <form id="join-form">
+            <input id="link" type="text" autocomplete="off" spellcheck="false" placeholder="https://....trycloudflare.com/?room=..." aria-label="Link da mesa" />
+            <button class="ghost" type="submit">Entrar</button>
+          </form>
+        </section>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite">{{MESSAGE}}</p>
+      <p class="hint">Seus amigos não precisam instalar nada: o mesmo link também abre no navegador, até no celular.</p>
+    </main>
+
+    <script>
+      const webview = window.chrome && window.chrome.webview;
+      const status = document.querySelector('#status');
+      const buttons = [...document.querySelectorAll('button')];
+      const linkInput = document.querySelector('#link');
+
+      function setBusy(busy, message) {
+        buttons.forEach((button) => { button.disabled = busy; });
+        status.textContent = message || '';
+      }
+
+      document.querySelector('#host').addEventListener('click', () => {
+        setBusy(true, 'Ligando a mesa…');
+        webview.postMessage({ action: 'host' });
+      });
+
+      document.querySelector('#join-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const link = linkInput.value.trim();
+        if (!link) {
+          status.textContent = 'Cole o link que o anfitrião mandou.';
+          linkInput.focus();
+          return;
+        }
+        setBusy(true, 'Abrindo a mesa…');
+        webview.postMessage({ action: 'join', link });
+      });
+
+      webview.addEventListener('message', (event) => {
+        if (event.data && event.data.error) {
+          setBusy(false, event.data.error);
+        }
+      });
+    </script>
+  </body>
+</html>

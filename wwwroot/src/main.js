@@ -1,6 +1,6 @@
-﻿import { DiceRoll } from '@dice-roller/rpg-dice-roller';
-import { createRoomManager } from './rooms.js?v=dice-anim-2';
-import { createDiceAnimator } from './dice-animation.js?v=dice-anim-2';
+import { DiceRoll } from '/vendor/rpg-dice-roller.mjs?v=5.5.0';
+import { createRoomManager } from './rooms.js?v=secure-1';
+import { createDiceAnimator } from './dice-animation.js?v=secure-1';
 
 const historyKey = 'dados-destino-history-v1';
 const form = document.querySelector('#roll-form');
@@ -277,8 +277,11 @@ function commitRoll(entry) {
     highlightSeatRoll(entry.id);
     renderPartyTable({ ...partyState, rolls: [...otherRolls, entry] });
   }
-  roomManager?.shareRoll(entry).catch(() => {
-    feedback.textContent = 'Rolagem local; não foi possível sincronizar com a sala.';
+  roomManager?.shareRoll(entry).catch((error) => {
+    const reason = String(error?.message || '').split('HubException:')[1]?.trim();
+    feedback.textContent = reason
+      ? `Rolagem não enviada à sala: ${reason}`
+      : 'Rolagem local; não foi possível sincronizar com a sala.';
   });
 }
 

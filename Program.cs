@@ -1,103 +1,96 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.FileProviders;
 using RolagemRpg;
 
 public static class Program
 {
-    private const int DefaultPort = 8766;
+    public const int DefaultPort = 8766;
 
-    // Sem argumentos, abre a janela do app e liga o servidor da mesa por dentro.
-    // Com --server, roda só o servidor (útil para hospedar sem janela).
+    // Sem argumentos: abre o app, com a tela para hospedar ou entrar numa mesa.
+    // Com --server: roda só o servidor, aberto na rede local, sem janela nem link da internet.
     [STAThread]
     public static void Main(string[] args)
     {
-        var serverOnly = args.Contains("--server", StringComparer.OrdinalIgnoreCase);
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        if (args.Contains("--server", StringComparer.OrdinalIgnoreCase))
         {
-            Args = args.Where(argument => !argument.Equals("--server", StringComparison.OrdinalIgnoreCase)).ToArray(),
-            ContentRootPath = AppContext.BaseDirectory,
-        });
-        if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
-        {
-            builder.WebHost.UseUrls($"http://0.0.0.0:{DefaultPort}");
-        }
-        builder.Services.AddSignalR();
-
-        var app = builder.Build();
-        string? inviteBaseUrl = null;
-        app.Lifetime.ApplicationStarted.Register(() =>
-        {
-            var lanAddress = FindLanAddress();
-            inviteBaseUrl = lanAddress is null ? null : $"http://{lanAddress}:{GetListeningPort(app)}";
-        });
-
-        app.UseDefaultFiles();
-        app.UseStaticFiles();
-        app.MapGet("/api/info", () => Results.Json(new { inviteBaseUrl }));
-        app.MapHub<TableHub>("/tableHub");
-
-        if (serverOnly)
-        {
-            app.Run();
-            return;
-        }
-
-        try
-        {
-            app.StartAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception exception)
-        {
-            MessageBox.Show(
-                $"Não foi possível iniciar a mesa.\n\n{exception.Message}\n\nVerifique se o Dados & Destino já não está aberto.",
-                "Dados & Destino",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            var serverArgs = args.Where(argument => !argument.Equals("--server", StringComparison.OrdinalIgnoreCase)).ToArray();
+            CreateServer(serverArgs, $"http://0.0.0.0:{DefaultPort}", tunnel: null).Run();
             return;
         }
 
         System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         System.Windows.Forms.Application.EnableVisualStyles();
         System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
-        System.Windows.Forms.Application.Run(new MainWindow(new Uri($"http://localhost:{GetListeningPort(app)}/"), inviteBaseUrl));
-        app.StopAsync().GetAwaiter().GetResult();
+        // --hospedar pula a tela inicial e já abre hospedando (bom para um atalho).
+        var hostOnStart = args.Contains("--hospedar", StringComparer.OrdinalIgnoreCase);
+        using var host = new HostSession();
+        System.Windows.Forms.Application.Run(new MainWindow(host, hostOnStart));
     }
 
-    private static int GetListeningPort(WebApplication app)
+    public static WebApplication CreateServer(string[] args, string defaultUrl, TunnelManager? tunnel)
     {
-        foreach (var address in app.Urls)
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            var normalized = address.Replace("://+", "://localhost").Replace("://*", "://localhost").Replace("://[::]", "://localhost");
-            if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+        if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
+        {
+            builder.WebHost.UseUrls(defaultUrl);
+        }
+        builder.Logging.SetMinimumLevel(LogLevel.Warning);
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.AddServerHeader = false;
+            options.Limits.MaxConcurrentConnections = 100;
+            options.Limits.MaxConcurrentUpgradedConnections = 100;
+            options.Limits.MaxRequestBodySize = 64 * 1024;
+            options.Limits.MaxRequestHeadersTotalSize = 16 * 1024;
+        });
+        builder.Services.AddSingleton<HubRateLimitFilter>();
+        builder.Services.AddSignalR(options =>
+        {
+            options.EnableDetailedErrors = false;
+            options.MaximumReceiveMessageSize = 8 * 1024;
+            options.AddFilter<HubRateLimitFilter>();
+        });
+
+        var app = builder.Build();
+        app.UseRequestFilter(tunnel);
+        app.UseSecurityHeaders();
+        var siteFiles = new ManifestEmbeddedFileProvider(typeof(Program).Assembly, "wwwroot");
+        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = siteFiles });
+        app.UseStaticFiles(new StaticFileOptions { FileProvider = siteFiles });
+        app.MapGet("/api/info", (HttpContext context) => Results.Json(
+            tunnel is not null && IsHostRequest(context)
+                ? tunnel.Snapshot()
+                : new TunnelSnapshot("off", 0, null, null)));
+        app.MapPost("/api/tunnel/retry", (HttpContext context) =>
+        {
+            if (tunnel is null || !IsHostRequest(context))
             {
-                return uri.Port;
+                return Results.NotFound();
             }
-        }
-        return DefaultPort;
+            tunnel.Start();
+            return Results.Ok();
+        });
+        app.MapHub<TableHub>("/tableHub");
+        return app;
     }
 
-    // Descobre o IP deste computador na rede local (nenhum pacote é enviado).
-    private static string? FindLanAddress()
-    {
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Connect("8.8.8.8", 65530);
-            var address = (socket.LocalEndPoint as IPEndPoint)?.Address;
-            return address is null || IPAddress.IsLoopback(address) ? null : address.ToString();
-        }
-        catch (SocketException)
-        {
-            return null;
-        }
-    }
+    // Pedido feito no próprio computador do host, e não por um amigo vindo pelo
+    // link da internet (a Cloudflare sempre acrescenta o cabeçalho Cf-Connecting-Ip).
+    private static bool IsHostRequest(HttpContext context) =>
+        context.Connection.RemoteIpAddress is { } address
+        && IPAddress.IsLoopback(address)
+        && !context.Request.Headers.ContainsKey("Cf-Connecting-Ip");
 }
 
 public sealed class TableHub : Hub
 {
-    private const int MaxRooms = 200;
+    private const int MaxRooms = 50;
     private const int MaxPlayers = 8;
     private const int MaxRollHistory = 20;
     private const string CodeCharacters = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -239,7 +232,7 @@ public sealed class TableHub : Hub
 
             PruneDisconnectedPlayers(room);
             var player = !string.IsNullOrWhiteSpace(reconnectToken)
-                ? room.Players.Values.FirstOrDefault(candidate => candidate.ReconnectToken == reconnectToken)
+                ? room.Players.Values.FirstOrDefault(candidate => TokensMatch(candidate.ReconnectToken, reconnectToken))
                 : null;
             if (player is null && room.Players.Count >= MaxPlayers)
             {
@@ -354,7 +347,7 @@ public sealed class TableHub : Hub
     private static string ValidatePlayerName(string playerName)
     {
         var name = (playerName ?? string.Empty).Trim();
-        if (name.Length is < 2 or > 22 || name.Any(char.IsControl))
+        if (name.Length is < 2 or > 22 || name.Any(IsHiddenCharacter))
         {
             throw new HubException("Use um nome de 2 a 22 caracteres.");
         }
@@ -364,12 +357,24 @@ public sealed class TableHub : Hub
     private static string ValidateCharacterName(string characterName)
     {
         var name = (characterName ?? string.Empty).Trim();
-        if (name.Length is < 2 or > 30 || name.Any(char.IsControl))
+        if (name.Length is < 2 or > 30 || name.Any(IsHiddenCharacter))
         {
             throw new HubException("Use um nome de personagem de 2 a 30 caracteres.");
         }
         return name;
     }
+
+    // Caracteres de controle e invisíveis (como o que inverte a direção do texto)
+    // servem para disfarçar nomes e imitar outro jogador.
+    private static bool IsHiddenCharacter(char character) =>
+        char.IsControl(character) || char.GetUnicodeCategory(character) == System.Globalization.UnicodeCategory.Format;
+
+    // Comparação em tempo constante: o tempo de resposta não revela pedaços do token.
+    private static bool TokensMatch(string expected, string? provided) =>
+        provided is not null && provided.Length <= 64
+        && CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(expected),
+            System.Text.Encoding.UTF8.GetBytes(provided));
 
     private static string GenerateRoomCode() => string.Concat(
         Enumerable.Range(0, 6).Select(_ => CodeCharacters[RandomNumberGenerator.GetInt32(CodeCharacters.Length)]));

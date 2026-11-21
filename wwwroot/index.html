@@ -1,17 +1,13 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#100e14" />
     <meta name="description" content="Uma mesa de rolagem de dados para suas aventuras de RPG." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/src/style.css?v=dice-anim-2" />
-    <script type="importmap">
-      { "imports": { "@dice-roller/rpg-dice-roller": "https://esm.sh/@dice-roller/rpg-dice-roller@5.5.0" } }
-    </script>
+    <meta name="referrer" content="no-referrer" />
+    <link rel="stylesheet" href="/vendor/fonts/fonts.css?v=1" />
+    <link rel="stylesheet" href="/src/style.css?v=secure-1" />
     <title>Dados & Destino | Rolagem de RPG</title>
   </head>
   <body>
@@ -21,8 +17,19 @@
           <span class="brand-mark" aria-hidden="true">D<span>20</span></span>
           <span class="brand-name">DADOS <i>&</i> DESTINO</span>
         </a>
-        <div class="table-status"><span id="connection-dot" class="status-dot"></span><span id="connection-status">CONECTANDO</span></div>
+        <div class="topbar-actions">
+          <div class="table-status"><span id="connection-dot" class="status-dot"></span><span id="connection-status">CONECTANDO</span></div>
+          <button id="app-home" class="app-home" type="button" hidden>INÍCIO</button>
+        </div>
       </header>
+
+      <div id="host-bar" class="host-bar" role="status" aria-live="polite" hidden>
+        <span class="host-bar-dot" aria-hidden="true"></span>
+        <span id="host-bar-text" class="host-bar-text">Gerando o link da internet para seus amigos…</span>
+        <code id="host-bar-link" class="host-bar-link" hidden></code>
+        <button id="host-bar-copy" class="host-bar-button" type="button" hidden>COPIAR LINK</button>
+        <button id="host-bar-retry" class="host-bar-button" type="button" hidden>TENTAR DE NOVO</button>
+      </div>
 
       <main id="inicio" class="workspace">
         <section class="page-heading" aria-labelledby="page-title">
@@ -160,7 +167,7 @@
         </div>
       </main>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.17/dist/browser/signalr.min.js"></script>
-    <script type="module" src="/src/main.js?v=dice-anim-2"></script>
+    <script src="/vendor/signalr.min.js?v=8.0.17"></script>
+    <script type="module" src="/src/main.js?v=secure-1"></script>
   </body>
 </html>

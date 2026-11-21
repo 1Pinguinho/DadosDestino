@@ -36,6 +36,11 @@ try {
 
 if (roomParameter) {
   codeInput.value = roomParameter.toUpperCase();
+  // Chegou por um convite: só falta o nome para entrar.
+  if (sessionRoomCode !== roomParameter.toUpperCase()) {
+    roomFeedback.textContent = 'Você foi convidado! Digite seu nome e o do personagem e clique em Entrar.';
+    (nameInput.value ? characterInput.value ? document.querySelector('#join-room') : characterInput : nameInput).focus();
+  }
 }
 
 const connection = new window.signalR.HubConnectionBuilder()
@@ -51,6 +56,13 @@ function setConnectionStatus(connected, label) {
 
 function showRoomMessage(message = '') {
   roomFeedback.textContent = message;
+}
+
+// Tira o prefixo técnico do SignalR ("An unexpected error occurred... HubException:").
+function friendlyError(error, fallback) {
+  const message = String(error?.message || '');
+  const hubMessage = message.split('HubException:').pop().trim();
+  return hubMessage && !hubMessage.startsWith('An unexpected error') ? hubMessage : fallback;
 }
 
 function getPlayerName() {
@@ -155,6 +167,7 @@ function renderRoom(room) {
     roomList.append(item);
   }
   updateRollControls(room);
+  updateHostLink();
   window.dispatchEvent(new CustomEvent('room-state', { detail: room }));
 }
 
@@ -186,7 +199,7 @@ async function enterRoom(create) {
       window.dispatchEvent(new CustomEvent('room-shared-history', { detail: room.rolls }));
     }
   } catch (error) {
-    showRoomMessage(error.message || 'Não foi possível entrar na sala.');
+    showRoomMessage(friendlyError(error, 'Não foi possível entrar na sala.'));
   } finally {
     buttons.forEach((button) => { button.disabled = false; });
   }
@@ -217,39 +230,114 @@ document.querySelector('#leave-room').addEventListener('click', async () => {
   }
 });
 
-// Quem abre pelo app (ou em localhost) recebe um convite com o IP da rede local,
-// que é o endereço que os outros computadores conseguem acessar.
-async function buildInviteUrl(code) {
-  let base = location.origin;
-  if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
-    try {
-      const info = await fetch('/api/info').then((response) => response.json());
-      if (info.inviteBaseUrl) {
-        base = info.inviteBaseUrl;
-      }
-    } catch {
-      base = location.origin;
-    }
+// O anfitrião vê a mesa em localhost; o convite precisa ser o link da internet
+// que o app gerou. Quem entrou pelo link já está no endereço certo.
+const isHostView = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const hostBar = document.querySelector('#host-bar');
+const hostBarText = document.querySelector('#host-bar-text');
+const hostBarLink = document.querySelector('#host-bar-link');
+const hostBarCopy = document.querySelector('#host-bar-copy');
+const hostBarRetry = document.querySelector('#host-bar-retry');
+let publicBaseUrl = '';
+let hostPollTimer = 0;
+
+function inviteUrlFor(code) {
+  const base = isHostView ? publicBaseUrl : location.origin;
+  if (!base) {
+    return '';
   }
   const url = new URL('/', base);
-  url.searchParams.set('room', code);
+  if (code) {
+    url.searchParams.set('room', code);
+  }
   return url.toString();
 }
 
-document.querySelector('#copy-room-link').addEventListener('click', async (event) => {
-  if (!activeRoom) {
+function updateHostLink() {
+  if (publicBaseUrl) {
+    hostBarLink.textContent = inviteUrlFor(activeRoom?.code);
+  }
+}
+
+async function copyInvite(button) {
+  const code = activeRoom?.code || '';
+  const link = inviteUrlFor(code);
+  if (!link) {
+    showRoomMessage(`O link da internet ainda está sendo gerado.${code ? ` Código da sala: ${code}` : ''}`);
     return;
   }
-  const button = event.currentTarget;
-  const code = activeRoom.code;
   try {
-    await navigator.clipboard.writeText(await buildInviteUrl(code));
+    await navigator.clipboard.writeText(link);
+    const label = button.textContent;
     button.textContent = 'COPIADO';
-    showRoomMessage('Convite copiado.');
+    setTimeout(() => { button.textContent = label; }, 2000);
+    showRoomMessage(code ? 'Convite copiado. Mande para seus amigos.' : 'Link copiado. Crie a sala para o convite já levar o código.');
   } catch {
-    showRoomMessage(`Código para compartilhar: ${code}`);
+    showRoomMessage(`Link para compartilhar: ${link}`);
+  }
+}
+
+async function refreshHostBar() {
+  clearTimeout(hostPollTimer);
+  let info;
+  try {
+    info = await fetch('/api/info', { cache: 'no-store' }).then((response) => response.json());
+  } catch {
+    hostPollTimer = setTimeout(refreshHostBar, 5000);
+    return;
+  }
+  if (!info || info.status === 'off') {
+    hostBar.hidden = true;
+    return;
+  }
+
+  hostBar.hidden = false;
+  hostBar.dataset.status = info.status;
+  publicBaseUrl = info.status === 'ready' && info.url ? info.url : '';
+  hostBarLink.hidden = !publicBaseUrl;
+  hostBarCopy.hidden = !publicBaseUrl;
+  hostBarRetry.hidden = info.status !== 'error';
+  if (info.status === 'downloading') {
+    hostBarText.textContent = `Preparando o link da internet (só na primeira vez)… ${info.percent || 0}%`;
+  } else if (info.status === 'starting') {
+    hostBarText.textContent = 'Gerando o link da internet para seus amigos…';
+  } else if (info.status === 'ready') {
+    hostBarText.textContent = 'Link para os amigos:';
+    updateHostLink();
+  } else {
+    hostBarText.textContent = `Sem link da internet: ${info.error || 'erro desconhecido.'}`;
+  }
+
+  const delay = info.status === 'ready' ? 15000 : info.status === 'error' ? 30000 : 1200;
+  hostPollTimer = setTimeout(refreshHostBar, delay);
+}
+
+document.querySelector('#copy-room-link').addEventListener('click', (event) => {
+  if (activeRoom) {
+    copyInvite(event.currentTarget);
   }
 });
+hostBarCopy.addEventListener('click', () => copyInvite(hostBarCopy));
+hostBarRetry.addEventListener('click', async () => {
+  hostBarRetry.hidden = true;
+  hostBarText.textContent = 'Gerando o link da internet para seus amigos…';
+  try {
+    await fetch('/api/tunnel/retry', { method: 'POST' });
+  } finally {
+    refreshHostBar();
+  }
+});
+if (isHostView) {
+  refreshHostBar();
+}
+
+// Dentro do app, o botão "Início" volta para a tela de hospedar/entrar.
+const appBridge = window.chrome?.webview;
+const appHomeButton = document.querySelector('#app-home');
+if (appBridge) {
+  appHomeButton.hidden = false;
+  appHomeButton.addEventListener('click', () => appBridge.postMessage({ action: 'home' }));
+}
 
 codeInput.addEventListener('input', () => {
   codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);

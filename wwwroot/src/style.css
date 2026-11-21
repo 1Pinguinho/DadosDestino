@@ -44,6 +44,24 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .table-status, .status-dot { display: flex; align-items: center; }
 .table-status { gap: 9px; color: var(--muted); font: 10px var(--mono); letter-spacing: 1px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #c6a0ee; box-shadow: 0 0 0 3px #c6a0ee24; }
+.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.app-home { padding: 6px 9px; border: 1px solid var(--line); border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; font: 9px var(--mono); letter-spacing: .8px; }
+.app-home:hover { border-color: var(--orange); color: var(--orange); }
+.app-home[hidden] { display: none; }
+
+/* Barra do anfitrião com o link da internet para os amigos */
+.host-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; padding: 11px 14px; border: 1px solid #c6a0ee40; border-left: 3px solid var(--green); border-radius: 3px; background: #191520e6; }
+.host-bar[hidden] { display: none; }
+.host-bar[data-status='error'] { border-color: #f0aa8355; border-left-color: var(--orange); }
+.host-bar-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px #c6a0ee24; animation: host-pulse 1.2s ease-in-out infinite; }
+.host-bar[data-status='ready'] .host-bar-dot { background: #8fd6a4; box-shadow: 0 0 0 3px #8fd6a424; animation: none; }
+.host-bar[data-status='error'] .host-bar-dot { background: var(--orange); box-shadow: 0 0 0 3px #f0aa8324; animation: none; }
+.host-bar-text { color: var(--ink); font-size: 12px; }
+.host-bar-link { min-width: 0; flex: 1 1 260px; overflow: hidden; padding: 6px 9px; border: 1px solid var(--line); border-radius: 2px; background: var(--paper); color: var(--green-dark); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.host-bar-link[hidden], .host-bar-button[hidden] { display: none; }
+.host-bar-button { min-height: 30px; padding: 0 11px; border: 0; border-radius: 2px; background: var(--green-action); color: #f4f1e7; cursor: pointer; font: 600 9px var(--mono); letter-spacing: .8px; }
+.host-bar-button:hover { background: var(--green-action-hover); }
+@keyframes host-pulse { 50% { opacity: .35; } }
 
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 26px 52px; padding: 36px 0 42px; }
 .workspace:not(.in-room) .page-heading,
