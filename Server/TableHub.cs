@@ -10,6 +10,21 @@ public sealed class TableHub : Hub
 {
     private const int MaxRollHistory = 20;
     private const int MaxRollDice = 10;
+
+    // Cores que um jogador pode dar à própria mesa e aos dados (o site tem os mesmos nomes).
+    public static readonly string[] PlayerColors =
+        { "violet", "rose", "amber", "sky", "emerald", "crimson", "teal", "gold", "blue", "slate" };
+    private static readonly HashSet<string> DiceColors = new(PlayerColors.Append("classic"), StringComparer.Ordinal);
+
+    // Dados personalizados: "custom:#borda:#inicio:#fim" (cores em hexadecimal).
+    private static readonly System.Text.RegularExpressions.Regex CustomDice =
+        new("^custom:#[0-9a-fA-F]{6}:#[0-9a-fA-F]{6}:#[0-9a-fA-F]{6}$");
+
+    private static string? ValidColor(string? color) =>
+        color is not null && PlayerColors.Contains(color) ? color : null;
+
+    private static string ValidDiceColor(string? color) =>
+        color is not null && (DiceColors.Contains(color) || CustomDice.IsMatch(color)) ? color : "classic";
     private const string CodeCharacters = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
     private static readonly TimeSpan DisconnectedLifetime = TimeSpan.FromMinutes(30);
     private static readonly object RoomsLock = new();
@@ -60,7 +75,7 @@ public sealed class TableHub : Hub
             });
         }
 
-        return await JoinRoomCore(code, playerName, characterName, asSpectator: false, request.ReconnectToken);
+        return await JoinRoomCore(code, playerName, characterName, asSpectator: false, request.ReconnectToken, request.Color);
     }
 
     public async Task<JoinResponse> JoinRoom(JoinRoomRequest request)
@@ -74,7 +89,7 @@ public sealed class TableHub : Hub
         // Espectador não precisa de personagem.
         var characterName = request.AsSpectator ? string.Empty : ValidateCharacterName(request.CharacterName);
         await LeaveCurrentRoom(false);
-        return await JoinRoomCore(code, playerName, characterName, request.AsSpectator, request.ReconnectToken);
+        return await JoinRoomCore(code, playerName, characterName, request.AsSpectator, request.ReconnectToken, request.Color);
     }
 
     // Salas públicas deste servidor, para a busca. Salas privadas só entram pelo código.
@@ -137,6 +152,72 @@ public sealed class TableHub : Hub
 
     public Task LeaveRoom() => LeaveCurrentRoom();
 
+    // Cada jogador escolhe a cor da própria mesa; todos veem.
+    public async Task SetPlayerColor(string color)
+    {
+        var valid = ValidColor(color) ?? throw new HubException("INVALID_REQUEST");
+        var (code, playerId) = CurrentSeat();
+        RoomRoster roster;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(playerId, out var player))
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            player.Color = valid;
+            roster = CreateRoster(code, room);
+        }
+        await Clients.Group(code).SendAsync("RoomUpdated", roster);
+    }
+
+    // O mestre tira alguém da sala (jogador ou espectador). Com Ban, essa pessoa
+    // (pelo IP) não consegue voltar para esta sala.
+    public async Task KickPlayer(KickRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.PlayerId) || request.PlayerId.Length > 64)
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
+        var (code, masterId) = CurrentSeat();
+        string? kickedConnection;
+        RoomRoster roster;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(masterId, out var master))
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            if (!master.IsMaster)
+            {
+                throw new HubException("MASTER_ONLY");
+            }
+            if (request.PlayerId == masterId || !room.Players.TryGetValue(request.PlayerId, out var target))
+            {
+                throw new HubException("TARGET_UNAVAILABLE");
+            }
+            room.Players.Remove(target.Id);
+            kickedConnection = target.ConnectionId;
+            if (kickedConnection is not null)
+            {
+                room.ConnectionPlayers.Remove(kickedConnection);
+            }
+            // Nunca bloqueia o próprio computador do mestre (mesmo IP).
+            if (request.Ban && target.ClientKey.Length > 0 && target.ClientKey != master.ClientKey)
+            {
+                room.BannedClients.Add(target.ClientKey);
+            }
+            room.LastActivityUtc = DateTime.UtcNow;
+            roster = CreateRoster(code, room);
+        }
+
+        if (kickedConnection is not null)
+        {
+            await Groups.RemoveFromGroupAsync(kickedConnection, code);
+            await Clients.Client(kickedConnection).SendAsync("Kicked", new { code, banned = request.Ban });
+        }
+        await Clients.Group(code).SendAsync("RoomUpdated", roster);
+    }
+
     public async Task ShareRoll(RollPayload roll)
     {
         if (roll is null || !Guid.TryParse(roll.Id, out _)
@@ -192,7 +273,8 @@ public sealed class TableHub : Hub
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 roll.IsPrivate,
                 roll.Dice?.ToArray() ?? Array.Empty<RollDie>(),
-                roll.ExtraDice);
+                roll.ExtraDice,
+                ValidDiceColor(roll.DiceColor));
 
             room.Rolls.Add(sharedRoll);
             if (room.Rolls.Count > MaxRollHistory)
@@ -235,7 +317,7 @@ public sealed class TableHub : Hub
         return (code, playerId);
     }
 
-    private async Task<JoinResponse> JoinRoomCore(string code, string playerName, string characterName, bool asSpectator, string? reconnectToken)
+    private async Task<JoinResponse> JoinRoomCore(string code, string playerName, string characterName, bool asSpectator, string? reconnectToken, string? color)
     {
         RoomSnapshot snapshot;
         string playerId;
@@ -268,8 +350,13 @@ public sealed class TableHub : Hub
                 player = null;
             }
 
+            var clientKey = Security.ClientKey(Context.GetHttpContext());
             if (player is null)
             {
+                if (room.BannedClients.Contains(clientKey))
+                {
+                    throw new HubException("BANNED");
+                }
                 if (asSpectator)
                 {
                     if (!room.AllowSpectators)
@@ -295,6 +382,9 @@ public sealed class TableHub : Hub
                     IsSpectator = asSpectator,
                     IsMaster = !asSpectator && room.MasterPlayerId is null,
                     JoinedAtUtc = DateTime.UtcNow,
+                    ClientKey = clientKey,
+                    // Sem escolha, cada jogador novo recebe a próxima cor da lista.
+                    Color = ValidColor(color) ?? PlayerColors[room.Players.Values.Count(candidate => !candidate.IsSpectator) % PlayerColors.Length],
                 };
                 room.Players.Add(player.Id, player);
                 if (player.IsMaster)
@@ -306,6 +396,7 @@ public sealed class TableHub : Hub
             {
                 replacedConnectionId = player.ConnectionId;
                 player.Name = playerName;
+                player.Color = ValidColor(color) ?? player.Color;
                 if (!player.IsSpectator)
                 {
                     player.CharacterName = characterName;
@@ -465,6 +556,7 @@ public sealed class TableHub : Hub
                 player.CharacterName,
                 player.IsMaster,
                 player.ConnectionId is not null,
+                player.Color,
                 visibleRolls.LastOrDefault(roll => roll.TargetPlayerId == player.Id))).ToArray();
         return new RoomSnapshot(
             code,
@@ -499,7 +591,7 @@ public sealed class TableHub : Hub
         room.AllowSpectators,
         config.MaxSpectatorsPerRoom,
         room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc).Select(player =>
-            new RoomPlayer(player.Id, player.Name, player.CharacterName, player.IsMaster, player.ConnectionId is not null, null)).ToArray(),
+            new RoomPlayer(player.Id, player.Name, player.CharacterName, player.IsMaster, player.ConnectionId is not null, player.Color, null)).ToArray(),
         Spectators(room));
 
     private static RoomSpectator[] Spectators(RoomState room) => room.Players.Values
@@ -554,6 +646,8 @@ public sealed class TableHub : Hub
         public int MaxPlayers { get; set; } = 8;
         public bool IsPublic { get; set; }
         public bool AllowSpectators { get; set; } = true;
+        // Quem o mestre removeu e bloqueou (por IP), só para esta sala.
+        public HashSet<string> BannedClients { get; } = new(StringComparer.Ordinal);
         public string? MasterPlayerId { get; set; }
         public DateTime LastActivityUtc { get; set; } = DateTime.UtcNow;
     }
@@ -566,6 +660,8 @@ public sealed class TableHub : Hub
         public string CharacterName { get; set; } = string.Empty;
         public bool IsMaster { get; set; }
         public bool IsSpectator { get; init; }
+        public string Color { get; set; } = PlayerColors[0];
+        public string ClientKey { get; init; } = string.Empty;
         public string? ConnectionId { get; set; }
         public DateTime JoinedAtUtc { get; init; }
         public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;

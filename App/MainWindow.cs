@@ -21,6 +21,10 @@ public sealed class MainWindow : Form
         ["purple"] = Color.FromArgb(16, 14, 20),
         ["red"] = Color.FromArgb(20, 12, 13),
         ["green"] = Color.FromArgb(11, 17, 14),
+        ["blue"] = Color.FromArgb(10, 14, 24),
+        ["teal"] = Color.FromArgb(9, 18, 19),
+        ["gold"] = Color.FromArgb(19, 16, 10),
+        ["pink"] = Color.FromArgb(20, 12, 18),
         ["white"] = Color.FromArgb(245, 242, 238),
         ["gray"] = Color.FromArgb(18, 19, 21),
         ["black"] = Color.FromArgb(5, 5, 5),
@@ -162,8 +166,12 @@ public sealed class MainWindow : Form
         try
         {
             var themes = File.Exists(ThemesFile) ? File.ReadAllText(ThemesFile) : string.Empty;
+            var palette = File.Exists(PaletteFile) ? File.ReadAllText(PaletteFile) : string.Empty;
+            var look = JsonSerializer.Serialize(new { theme = preferences.Theme, custom = preferences.Custom, zoom = preferences.Zoom }, AppConfigFile.Options);
             html = File.ReadAllText(AppPaths.LauncherFile)
                 .Replace("/*{{THEMES}}*/", themes.Replace("</", "<\\/"), StringComparison.Ordinal)
+                .Replace("/*{{PALETTE}}*/", palette.Replace("</", "<\\/"), StringComparison.Ordinal)
+                .Replace("{{LOOK}}", WebUtility.HtmlEncode(look), StringComparison.Ordinal)
                 .Replace("{{LANG}}", preferences.Language, StringComparison.Ordinal)
                 .Replace("{{THEME}}", preferences.Theme, StringComparison.Ordinal)
                 .Replace("{{MESSAGE}}", WebUtility.HtmlEncode(messageCode ?? string.Empty), StringComparison.Ordinal)
@@ -179,6 +187,7 @@ public sealed class MainWindow : Form
     }
 
     private static string ThemesFile => Path.Combine(AppPaths.SiteFolder, "src", "themes.css");
+    private static string PaletteFile => Path.Combine(AppPaths.SiteFolder, "src", "palette.js");
 
     private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
@@ -194,12 +203,33 @@ public sealed class MainWindow : Form
 
         switch (message?.Action)
         {
-            // Idioma e tema: só valores da lista são aceitos, de qualquer tela.
+            // Configurações vindas da mesa: tudo é conferido antes de salvar.
             case "settings":
-                if (preferences.Apply(message.Language, message.Theme))
+                if (message.Settings is { ValueKind: JsonValueKind.Object } settings)
                 {
+                    Preferences? incoming;
+                    try
+                    {
+                        incoming = settings.Deserialize<Preferences>(AppConfigFile.Options);
+                    }
+                    catch (JsonException)
+                    {
+                        return;
+                    }
+                    if (incoming is not null && preferences.Apply(incoming))
+                    {
+                        preferences.Save();
+                        ApplyBackground();
+                        UpdateTitle();
+                    }
+                }
+                return;
+            // A tela inicial só troca o idioma.
+            case "language":
+                if (message.Language is { } language && Preferences.Languages.Contains(language) && language != preferences.Language)
+                {
+                    preferences.Language = language;
                     preferences.Save();
-                    ApplyBackground();
                     UpdateTitle();
                 }
                 return;
@@ -269,10 +299,7 @@ public sealed class MainWindow : Form
     }
 
     private void SendSettings() =>
-        webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
-        {
-            settings = new { language = preferences.Language, theme = preferences.Theme },
-        }));
+        webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { settings = preferences }, AppConfigFile.Options));
 
     private void SendLauncherError(string error, string? detail = null) =>
         webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { error, detail }));
@@ -289,7 +316,9 @@ public sealed class MainWindow : Form
 
     private void ApplyBackground()
     {
-        var color = ThemeBackgrounds.TryGetValue(preferences.Theme, out var found) ? found : ThemeBackgrounds["purple"];
+        var color = preferences.Theme == "custom"
+            ? ColorTranslator.FromHtml(preferences.Custom.Bg ?? CustomColors.DefaultBg)
+            : ThemeBackgrounds.TryGetValue(preferences.Theme, out var found) ? found : ThemeBackgrounds["purple"];
         BackColor = color;
         webView.DefaultBackgroundColor = color;
     }
@@ -324,5 +353,5 @@ public sealed class MainWindow : Form
         }
     }
 
-    private sealed record BridgeMessage(string? Action, string? Link, string? Language, string? Theme);
+    private sealed record BridgeMessage(string? Action, string? Link, string? Language, JsonElement? Settings);
 }

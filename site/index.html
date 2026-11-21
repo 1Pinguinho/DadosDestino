@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#100e14" />
     <meta name="description" content="Uma mesa de rolagem de dados para suas aventuras de RPG." />
     <meta name="referrer" content="no-referrer" />
+    <script src="/src/palette.js"></script>
     <script src="/src/boot.js"></script>
     <link rel="stylesheet" href="/vendor/fonts/fonts.css" />
     <link rel="stylesheet" href="/src/themes.css" />
@@ -49,17 +50,64 @@
                 <strong id="settings-title" data-i18n="settings.title">Configurações</strong>
                 <button id="settings-close" class="settings-close" type="button" data-i18n-aria="settings.close">×</button>
               </div>
-              <span class="field-label" data-i18n="settings.language">IDIOMA</span>
-              <div class="segmented" role="group">
-                <button type="button" data-language="pt-BR" aria-pressed="true">Português (BR)</button>
-                <button type="button" data-language="en" aria-pressed="false">English</button>
+              <div class="settings-body">
+                <section class="settings-section">
+                  <span class="field-label" data-i18n="settings.language">IDIOMA</span>
+                  <div class="segmented" role="group">
+                    <button type="button" data-language="pt-BR" aria-pressed="true">Português (BR)</button>
+                    <button type="button" data-language="en" aria-pressed="false">English</button>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <span class="field-label" data-i18n="settings.theme">TEMA</span>
+                  <div id="theme-options" class="theme-options" role="group"></div>
+                  <div id="custom-colors" class="custom-colors" hidden>
+                    <label><input type="color" data-custom="bg" /><span data-i18n="settings.customBg">Fundo</span></label>
+                    <label><input type="color" data-custom="accent" /><span data-i18n="settings.customAccent">Destaque</span></label>
+                    <label><input type="color" data-custom="glow" /><span data-i18n="settings.customGlow">Degradê</span></label>
+                  </div>
+                </section>
+
+                <section class="settings-section settings-row">
+                  <span class="field-label" data-i18n="settings.zoom">ZOOM</span>
+                  <div class="zoom-control">
+                    <button id="zoom-out" type="button" data-i18n-aria="settings.zoomOut">−</button>
+                    <output id="zoom-value">100%</output>
+                    <button id="zoom-in" type="button" data-i18n-aria="settings.zoomIn">+</button>
+                    <button id="zoom-reset" class="icon-button" type="button" data-i18n-aria="settings.zoomReset" data-i18n-title="settings.zoomReset"><svg class="icon"><use href="#i-refresh" /></svg></button>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <span class="field-label" data-i18n="settings.seatColor">COR DA SUA MESA</span>
+                  <div id="seat-color-options" class="color-options" role="group"></div>
+                  <span class="field-label" data-i18n="settings.diceColor">COR DOS SEUS DADOS</span>
+                  <div id="dice-color-options" class="color-options" role="group"></div>
+                  <div id="dice-custom" class="custom-colors" hidden>
+                    <label><input type="color" data-dice="edge" /><span data-i18n="settings.diceEdge">Borda</span></label>
+                    <label><input type="color" data-dice="from" /><span data-i18n="settings.diceFrom">Início</span></label>
+                    <label><input type="color" data-dice="to" /><span data-i18n="settings.diceTo">Fim</span></label>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <div class="settings-row">
+                    <span class="field-label" data-i18n="settings.animations">ANIMAÇÕES DOS DADOS</span>
+                    <button id="motion-toggle" class="switch" type="button" aria-pressed="true">Ligadas</button>
+                  </div>
+                  <div class="settings-row">
+                    <span class="field-label" data-i18n="settings.sound">SOM DOS DADOS</span>
+                    <button id="sound-toggle" class="switch" type="button" aria-pressed="true">Ligado</button>
+                  </div>
+                  <label class="volume-row">
+                    <span class="field-label" data-i18n="settings.volume">VOLUME</span>
+                    <input id="volume" type="range" min="0" max="100" step="5" value="20" data-i18n-aria="settings.volume" />
+                    <output id="volume-value">20%</output>
+                  </label>
+                </section>
               </div>
-              <span class="field-label" data-i18n="settings.theme">TEMA</span>
-              <div id="theme-options" class="theme-options" role="group"></div>
-              <div class="settings-row">
-                <span class="field-label" data-i18n="settings.animations">ANIMAÇÕES DOS DADOS</span>
-                <button id="motion-toggle" class="switch" type="button" aria-pressed="true">Ligadas</button>
-              </div>
+              <button id="settings-reset" class="settings-reset" type="button" data-i18n="settings.reset">Restaurar padrões</button>
             </div>
           </div>
         </div>
@@ -211,11 +259,16 @@
             </div>
 
             <div class="quick-rolls">
-              <span class="field-label" data-i18n="roller.shortcuts">ATALHOS</span>
-              <div class="quick-options">
-                <button type="button" data-quick="1d20+5"><span data-i18n="roller.perception">Percepção</span> <b>+5</b></button>
-                <button type="button" data-quick="2d20kh1"><span data-i18n="roller.advantage">Vantagem</span> <b>2d20</b></button>
-                <button type="button" data-quick="2d20kl1"><span data-i18n="roller.disadvantage">Desvantagem</span> <b>2d20</b></button>
+              <div class="quick-head">
+                <span class="field-label" data-i18n="roller.shortcuts">ATALHOS</span>
+                <button id="shortcut-edit" class="text-button" type="button" aria-pressed="false" data-i18n="shortcut.edit">EDITAR</button>
+              </div>
+              <div id="quick-options" class="quick-options"></div>
+              <div id="shortcut-form" class="shortcut-form" hidden>
+                <input id="shortcut-name" type="text" maxlength="24" autocomplete="off" data-i18n-placeholder="shortcut.name" data-i18n-aria="shortcut.name" />
+                <input id="shortcut-notation" type="text" maxlength="60" autocomplete="off" spellcheck="false" data-i18n-placeholder="shortcut.notation" data-i18n-aria="shortcut.notation" />
+                <button id="shortcut-save" class="room-button room-button-primary" type="button" data-i18n="shortcut.save">Salvar</button>
+                <button id="shortcut-cancel" class="room-button" type="button" data-i18n="shortcut.cancel">Cancelar</button>
               </div>
             </div>
 

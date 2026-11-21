@@ -23,18 +23,29 @@ public static class AppPaths
     public static string ConnectorFolder => Ensure(Path.Combine(DataFolder, "conector"));
     public static string BrowserFolder => Ensure(Path.Combine(DataFolder, "navegador"));
 
-    // A versão 1.1 guardava o conector em %LOCALAPPDATA%\DadosDestino. Reaproveita
-    // ele para não baixar 55 MB de novo (a assinatura é conferida antes de usar).
+    // Garante o conector sem baixar 55 MB quando ele já existe em algum lugar:
+    // 1) o que vem junto no pacote (dados\conector ao lado do .exe), se o app estiver
+    //    guardando os dados em outra pasta; 2) o da versão 1.1, em %LOCALAPPDATA%\DadosDestino.
+    // A assinatura da Cloudflare é conferida antes de cada uso, então copiar é seguro.
     public static void ReuseOldConnector()
     {
         try
         {
-            var oldConnector = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DadosDestino", "cloudflared.exe");
-            var newConnector = Path.Combine(ConnectorFolder, "cloudflared.exe");
-            if (File.Exists(oldConnector) && !File.Exists(newConnector))
+            var target = Path.Combine(ConnectorFolder, "cloudflared.exe");
+            if (File.Exists(target))
             {
-                File.Copy(oldConnector, newConnector);
+                return;
+            }
+            var candidates = new[]
+            {
+                Path.Combine(AppFolder, "dados", "conector", "cloudflared.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DadosDestino", "cloudflared.exe"),
+            };
+            var source = candidates.FirstOrDefault(candidate =>
+                File.Exists(candidate) && !string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase));
+            if (source is not null)
+            {
+                File.Copy(source, target);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

@@ -103,7 +103,34 @@ function cleanDice(list) {
     }));
 }
 
-function outcomeOf(dice) {
+// Jackpot: 3 ou mais dados que contam no total com o mesmo número (dados Fate não contam).
+function jackpotValue(dice) {
+  const counts = new Map();
+  for (const die of dice) {
+    if (die.used && die.sides !== FATE) {
+      counts.set(die.value, (counts.get(die.value) || 0) + 1);
+    }
+  }
+  let best = null;
+  for (const [value, count] of counts) {
+    if (count >= 3 && (best === null || value > best)) {
+      best = value;
+    }
+  }
+  return best;
+}
+
+// Total com 3 ou mais dígitos iguais (111, 777, 2222...).
+function isRepdigitTotal(total) {
+  return Number.isInteger(total) && /^-?(\d)\1{2,}$/.test(String(total));
+}
+
+// Jackpot só com dados rolados (com ou sem soma, como 1d20+5); conta pura, como
+// 423-523, nunca dá jackpot porque não tem dado.
+function outcomeOf(dice, total) {
+  if (dice.length > 0 && (jackpotValue(dice) !== null || isRepdigitTotal(total))) {
+    return 'jackpot';
+  }
   const d20s = dice.filter((die) => die.sides === 20 && die.used);
   if (d20s.some((die) => die.natural === 20)) {
     return 'crit';
@@ -114,8 +141,35 @@ function outcomeOf(dice) {
   return '';
 }
 
-// Um animador por mesa. "roll" é { dice, extraDice, total } (como vem da sala).
-export function createDiceAnimator(stage) {
+// Cor dos dados: um nome da lista, "classic" ou "custom:#borda:#inicio:#fim".
+const CUSTOM_DICE = /^custom:(#[0-9a-f]{6}):(#[0-9a-f]{6}):(#[0-9a-f]{6})$/i;
+
+function brightness(hex) {
+  const value = parseInt(hex.slice(1), 16);
+  return (0.299 * (value >> 16) + 0.587 * ((value >> 8) & 255) + 0.114 * (value & 255)) / 255;
+}
+
+function applyDiceColor(stage, diceColor) {
+  const custom = CUSTOM_DICE.exec(diceColor || '');
+  for (const name of ['--dice-edge', '--dice-from', '--dice-to', '--dice-ink']) {
+    stage.style.removeProperty(name);
+  }
+  if (!custom) {
+    stage.dataset.diceColor = diceColor || 'classic';
+    return;
+  }
+  const [, edge, from, to] = custom;
+  stage.dataset.diceColor = 'custom';
+  stage.style.setProperty('--dice-edge', edge);
+  stage.style.setProperty('--dice-from', from);
+  stage.style.setProperty('--dice-to', to);
+  // Número claro em dado escuro e escuro em dado claro.
+  stage.style.setProperty('--dice-ink', (brightness(from) + brightness(to)) / 2 > 0.6 ? '#1b1320' : '#fff8ff');
+}
+
+// Um animador por mesa. "roll" é { dice, extraDice, total, diceColor } (como vem da sala).
+// hooks.onLand toca quando um dado cai; hooks.onOutcome no crítico ou na falha.
+export function createDiceAnimator(stage, hooks = {}) {
   let active = null;
 
   function stop(commit) {
@@ -131,12 +185,13 @@ export function createDiceAnimator(stage) {
     }
   }
 
-  function spawnSparks() {
+  // Faíscas no crítico; moedas no jackpot.
+  function spawnSparks(kind = 'roll-spark') {
     for (let index = 0; index < SPARK_COUNT; index += 1) {
       const spark = document.createElement('span');
-      spark.className = 'roll-spark';
+      spark.className = kind;
       spark.style.setProperty('--angle', `${Math.round(index * (360 / SPARK_COUNT) + randomBetween(-8, 8))}deg`);
-      spark.style.setProperty('--distance', `${Math.round(randomBetween(50, 110))}px`);
+      spark.style.setProperty('--distance', `${Math.round(randomBetween(50, kind === 'roll-coin' ? 140 : 110))}px`);
       spark.style.setProperty('--spark-delay', `${Math.round(randomBetween(0, 90))}ms`);
       stage.append(spark);
     }
@@ -147,8 +202,9 @@ export function createDiceAnimator(stage) {
     const dice = cleanDice(roll.dice);
     const extra = Math.max(0, Number(roll.extraDice) || 0);
     stage.replaceChildren();
-    stage.classList.remove('is-crit', 'is-fumble');
+    stage.classList.remove('is-crit', 'is-fumble', 'is-jackpot');
     stage.classList.toggle('is-static', !animated);
+    applyDiceColor(stage, roll.diceColor);
 
     const tray = document.createElement('div');
     tray.className = 'roll-dice';
@@ -207,10 +263,22 @@ export function createDiceAnimator(stage) {
     };
 
     const showOutcome = () => {
-      const outcome = outcomeOf(dice);
+      const outcome = outcomeOf(dice, roll.total);
       if (outcome) {
-        stage.classList.add(outcome === 'crit' ? 'is-crit' : 'is-fumble');
-        outcomeLabel.textContent = t(outcome === 'crit' ? 'dice.crit' : 'dice.fumble');
+        stage.classList.add(`is-${outcome}`);
+        outcomeLabel.textContent = t(`dice.${outcome}`);
+      }
+      if (outcome === 'jackpot') {
+        // Os dados iguais pulam um depois do outro.
+        const value = jackpotValue(dice);
+        let order = 0;
+        dice.forEach((die, index) => {
+          if (die.used && die.sides !== FATE && die.value === value) {
+            dieElements[index].classList.add('is-match');
+            dieElements[index].style.setProperty('--match-delay', `${order * 90}ms`);
+            order += 1;
+          }
+        });
       }
       return outcome;
     };
@@ -223,7 +291,7 @@ export function createDiceAnimator(stage) {
     stop(false);
     if (!roll) {
       stage.replaceChildren();
-      stage.classList.remove('is-crit', 'is-fumble');
+      stage.classList.remove('is-crit', 'is-fumble', 'is-jackpot');
       return;
     }
     const parts = build(roll, false);
@@ -267,8 +335,14 @@ export function createDiceAnimator(stage) {
       clearInterval(state.cycle);
       active = null;
       parts.totalBox.classList.add('is-visible');
-      if (parts.showOutcome() === 'crit' && !reduceMotion) {
+      const outcome = parts.showOutcome();
+      if (outcome === 'crit' && !reduceMotion) {
         spawnSparks();
+      } else if (outcome === 'jackpot' && !reduceMotion) {
+        spawnSparks('roll-coin');
+      }
+      if (outcome) {
+        hooks.onOutcome?.(outcome);
       }
       countUp();
       onReveal();
@@ -293,7 +367,11 @@ export function createDiceAnimator(stage) {
     parts.dice.forEach((_, index) => {
       const landsAt = Math.min(index * STAGGER_MS, MAX_STAGGER_MS) + TUMBLE_MS * 0.62;
       lastLanding = Math.max(lastLanding, landsAt);
-      state.timers.push(setTimeout(() => parts.land(index), landsAt));
+      state.timers.push(setTimeout(() => {
+        parts.land(index);
+        // Som de no máximo 6 dados por rolagem, para não virar barulho.
+        if (index < 6) hooks.onLand?.();
+      }, landsAt));
     });
     state.timers.push(setTimeout(reveal, parts.dice.length ? lastLanding + 260 : 0));
   }

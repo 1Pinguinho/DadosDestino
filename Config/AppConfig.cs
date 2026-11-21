@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
 namespace RolagemRpg;
@@ -24,14 +25,32 @@ public sealed class ServerConfig
     }
 }
 
-// config/preferencias.json: idioma e tema escolhidos no app.
+// config/preferencias.json: as escolhas de quem usa o app (idioma, tema, cores,
+// zoom, som, atalhos). Quem joga pelo navegador guarda as suas no próprio navegador.
+// Tudo que chega da página é conferido aqui antes de ser salvo.
 public sealed class Preferences
 {
     public static readonly string[] Languages = { "pt-BR", "en" };
-    public static readonly string[] Themes = { "purple", "red", "green", "white", "gray", "black" };
+    public static readonly string[] Themes =
+        { "purple", "red", "green", "blue", "teal", "gold", "pink", "white", "gray", "black", "custom" };
+    public static readonly string[] Colors =
+        { "violet", "rose", "amber", "sky", "emerald", "crimson", "teal", "gold", "blue", "slate" };
+    private static readonly string[] ShortcutKeys = { "roller.perception", "roller.advantage", "roller.disadvantage" };
+    private static readonly Regex HexColor = new("^#[0-9a-fA-F]{6}$");
+    private static readonly Regex NotationText = new(@"^[0-9a-zA-Z%!<>=+\-*/(). ]{1,60}$");
 
     public string Language { get; set; } = "pt-BR";
     public string Theme { get; set; } = "purple";
+    public CustomColors Custom { get; set; } = new();
+    public double Zoom { get; set; } = 1;
+    public bool Animations { get; set; } = true;
+    public bool Sound { get; set; } = true;
+    // Volume baixo por padrão, para não assustar quem usa equalizador ou volume alto.
+    public int Volume { get; set; } = 20;
+    public string? SeatColor { get; set; }
+    public string DiceColor { get; set; } = "classic";
+    public DiceColors DiceCustom { get; set; } = new();
+    public List<Shortcut>? Shortcuts { get; set; }
 
     public static Preferences Load()
     {
@@ -42,20 +61,23 @@ public sealed class Preferences
 
     public void Save() => AppConfigFile.Write("preferencias.json", this);
 
-    public bool Apply(string? language, string? theme)
+    // Copia o que veio da página, já conferido. Retorna true se algo mudou.
+    public bool Apply(Preferences incoming)
     {
-        var changed = false;
-        if (language is not null && Languages.Contains(language) && language != Language)
-        {
-            Language = language;
-            changed = true;
-        }
-        if (theme is not null && Themes.Contains(theme) && theme != Theme)
-        {
-            Theme = theme;
-            changed = true;
-        }
-        return changed;
+        incoming.Normalize();
+        var before = JsonSerializer.Serialize(this);
+        Language = incoming.Language;
+        Theme = incoming.Theme;
+        Custom = incoming.Custom;
+        Zoom = incoming.Zoom;
+        Animations = incoming.Animations;
+        Sound = incoming.Sound;
+        Volume = incoming.Volume;
+        SeatColor = incoming.SeatColor;
+        DiceColor = incoming.DiceColor;
+        DiceCustom = incoming.DiceCustom;
+        Shortcuts = incoming.Shortcuts;
+        return before != JsonSerializer.Serialize(this);
     }
 
     private void Normalize()
@@ -68,12 +90,50 @@ public sealed class Preferences
         {
             Theme = "purple";
         }
+        Custom ??= new CustomColors();
+        Custom.Bg = HexColor.IsMatch(Custom.Bg ?? string.Empty) ? Custom.Bg!.ToLowerInvariant() : CustomColors.DefaultBg;
+        Custom.Accent = HexColor.IsMatch(Custom.Accent ?? string.Empty) ? Custom.Accent!.ToLowerInvariant() : CustomColors.DefaultAccent;
+        Custom.Glow = HexColor.IsMatch(Custom.Glow ?? string.Empty) ? Custom.Glow!.ToLowerInvariant() : CustomColors.DefaultGlow;
+        Zoom = double.IsFinite(Zoom) ? Math.Round(Math.Clamp(Zoom, 0.7, 1.5), 2) : 1;
+        Volume = Math.Clamp(Volume, 0, 100);
+        SeatColor = SeatColor is not null && Colors.Contains(SeatColor) ? SeatColor : null;
+        DiceColor = DiceColor is "classic" or "custom" || Colors.Contains(DiceColor) ? DiceColor : "classic";
+        DiceCustom ??= new DiceColors();
+        DiceCustom.Edge = HexColor.IsMatch(DiceCustom.Edge ?? string.Empty) ? DiceCustom.Edge!.ToLowerInvariant() : DiceColors.DefaultEdge;
+        DiceCustom.From = HexColor.IsMatch(DiceCustom.From ?? string.Empty) ? DiceCustom.From!.ToLowerInvariant() : DiceColors.DefaultFrom;
+        DiceCustom.To = HexColor.IsMatch(DiceCustom.To ?? string.Empty) ? DiceCustom.To!.ToLowerInvariant() : DiceColors.DefaultTo;
+        Shortcuts = Shortcuts?
+            .Where(shortcut => shortcut is not null && NotationText.IsMatch(shortcut.Notation ?? string.Empty)
+                && (shortcut.Key is null || ShortcutKeys.Contains(shortcut.Key))
+                && (shortcut.Name is null || (shortcut.Name.Length <= 24 && !shortcut.Name.Any(char.IsControl))))
+            .Take(12)
+            .Select(shortcut => new Shortcut { Name = shortcut.Name?.Trim(), Key = shortcut.Key, Notation = shortcut.Notation!.Trim() })
+            .ToList();
     }
+}
+
+public sealed class CustomColors
+{
+    public const string DefaultBg = "#101820";
+    public const string DefaultAccent = "#6fc3df";
+    public const string DefaultGlow = "#c86fdf";
+
+    public string? Bg { get; set; } = DefaultBg;
+    public string? Accent { get; set; } = DefaultAccent;
+    public string? Glow { get; set; } = DefaultGlow;
+}
+
+// Atalho de rolagem: Key é um dos atalhos padrão (traduzido); Name é o nome dado pelo jogador.
+public sealed class Shortcut
+{
+    public string? Name { get; set; }
+    public string? Key { get; set; }
+    public string? Notation { get; set; }
 }
 
 internal static class AppConfigFile
 {
-    private static readonly JsonSerializerOptions Options = new()
+    public static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -108,4 +168,16 @@ internal static class AppConfigFile
             // Sem permissão de escrita: a configuração vale só até fechar.
         }
     }
+}
+
+// Dados personalizados: cor da borda e degradê de dentro (do início ao fim).
+public sealed class DiceColors
+{
+    public const string DefaultEdge = "#ffd86a";
+    public const string DefaultFrom = "#8e5bd6";
+    public const string DefaultTo = "#2b1d45";
+
+    public string? Edge { get; set; } = DefaultEdge;
+    public string? From { get; set; } = DefaultFrom;
+    public string? To { get; set; } = DefaultTo;
 }

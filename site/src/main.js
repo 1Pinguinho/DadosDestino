@@ -2,9 +2,11 @@
 // As salas ficam em rooms.js; idioma em i18n.js; tema e animações em settings.js.
 import { DiceRoll } from '/vendor/rpg-dice-roller.mjs';
 import { t, errorCode, errorText, formatTime } from './i18n.js';
-import { initSettings } from './settings.js';
 import { createRoomManager } from './rooms.js';
 import { createDiceAnimator, packDice } from './dice-animation.js';
+import { diceColorValue, initSettings } from './settings.js';
+import { playLand, playOutcome } from './sound.js';
+import { initShortcuts } from './shortcuts.js';
 
 initSettings();
 
@@ -65,7 +67,7 @@ function mergeHistory(entries) {
 // ---------- mesa da campanha ----------
 
 function animationSource(roll) {
-  return { dice: roll.dice || [], extraDice: roll.extraDice || 0, total: roll.total };
+  return { dice: roll.dice || [], extraDice: roll.extraDice || 0, total: roll.total, diceColor: roll.diceColor || 'classic' };
 }
 
 function createSeat(playerId) {
@@ -104,7 +106,7 @@ function createSeat(playerId) {
 
   const entry = {
     seat, avatar, name, presence, actions, stage, waiting, notation, visibility,
-    animator: createDiceAnimator(stage),
+    animator: createDiceAnimator(stage, { onLand: playLand, onOutcome: playOutcome }),
     shownRollId: null,
     actionsKey: '',
   };
@@ -122,7 +124,7 @@ function showSeatRoll(entry, roll) {
 }
 
 function updateSeat(entry, player, index, room, lastRoll) {
-  entry.seat.dataset.tone = String(index % 4);
+  entry.seat.dataset.color = player.color || '';
   entry.seat.classList.toggle('is-offline', !player.isOnline);
   entry.avatar.textContent = player.name.trim().slice(0, 1).toUpperCase();
   entry.name.textContent = `${player.characterName} (${player.name})`;
@@ -400,6 +402,7 @@ function rollDice(notation) {
     targetPlayerId: rollContext.targetPlayerId,
     isPrivate: rollContext.isPrivate,
     roomCode: partyState.code,
+    diceColor: diceColorValue(),
     ...packDice(roll),
   };
   showFeedback();
@@ -451,12 +454,21 @@ for (const option of dieOptions) {
 quantityInput.addEventListener('change', updateNotation);
 modifierInput.addEventListener('change', updateNotation);
 
-document.querySelectorAll('[data-quick]').forEach((button) => {
-  button.addEventListener('click', () => {
-    notationInput.value = button.dataset.quick;
+// Atalhos (os padrões e os criados pelo jogador): um clique rola.
+initShortcuts({
+  isValid: (notation) => {
+    try {
+      new DiceRoll(notation);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  onRoll: (notation) => {
+    notationInput.value = notation;
     showFeedback();
-    rollDice(notationInput.value);
-  });
+    rollDice(notation);
+  },
 });
 
 clearHistoryButton.addEventListener('click', () => {

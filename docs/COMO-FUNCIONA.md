@@ -12,9 +12,12 @@ DadosDestino/
 │   │   ├── main.js            rolagens, mesa da campanha e histórico
 │   │   ├── rooms.js           salas: criar, entrar, procurar, espectadores, convite
 │   │   ├── dice-animation.js  animação dos dados
+│   │   ├── shortcuts.js       atalhos de rolagem (padrões e os criados pelo jogador)
+│   │   ├── sound.js           som dos dados (gerado na hora, sem arquivos de áudio)
 │   │   ├── i18n.js            troca de idioma
-│   │   ├── settings.js        painel de configurações (idioma, tema, animações)
-│   │   ├── boot.js            aplica tema e idioma antes de a página aparecer
+│   │   ├── settings.js        configurações: tema, cores, zoom, som, volume, atalhos
+│   │   ├── palette.js         monta o tema personalizado a partir de 3 cores
+│   │   ├── boot.js            aplica tema, zoom e idioma antes de a página aparecer
 │   │   ├── locales/           textos: pt-BR.js e en.js
 │   │   ├── themes.css         cores dos temas
 │   │   └── style.css          visual e layout
@@ -24,10 +27,10 @@ DadosDestino/
 ├── docs/                este arquivo
 ├── config/              criada na primeira vez que o app abre
 │   ├── config.json      ajustes do servidor (veja abaixo)
-│   └── preferencias.json  idioma e tema escolhidos no app
-└── dados/               criada na primeira vez que o app abre
+│   └── preferencias.json  as suas configurações no app (veja abaixo)
+└── dados/               vem com o conector; o resto é criado ao abrir o app
     ├── navegador/       dados da janela do app (nome do jogador, histórico)
-    └── conector/        o conector da Cloudflare (cloudflared.exe)
+    └── conector/        o conector da Cloudflare (cloudflared.exe) e a licença dele
 ```
 
 Se a pasta do app não aceitar escrita (por exemplo, dentro de "Arquivos de Programas"),
@@ -43,6 +46,28 @@ Edite com o app fechado. Valores fora do limite voltam ao padrão.
 | `maxRooms` | 50 | Quantas salas podem existir ao mesmo tempo (1 a 200). |
 | `maxPlayersPerRoom` | 12 | O maior limite de jogadores que alguém pode escolher ao criar uma sala (2 a 16). |
 | `maxSpectatorsPerRoom` | 10 | Quantos espectadores cada sala aceita (0 desliga os espectadores). |
+
+## Suas configurações
+
+Ficam na engrenagem do topo e são salvas sozinhas, para cada pessoa:
+
+- **No app:** em `config/preferencias.json`. Vale para a mesa, para a tela inicial e para as
+  mesas de amigos abertas pelo app.
+- **No navegador** (quem entra pelo link): no próprio navegador daquela pessoa.
+
+| Configuração | Padrão |
+|---|---|
+| Idioma | o do Windows (Português ou English) |
+| Tema | roxo; há 10 prontos e o **personalizado**, em que você escolhe fundo, destaque e degradê |
+| Zoom | 100% (de 70% a 150%) |
+| Cor da sua mesa | automática (todos na sala veem a cor escolhida) |
+| Cor dos seus dados | clássico, uma cor por tipo de dado (todos veem) |
+| Animações | ligadas |
+| Som dos dados | ligado, com **volume em 20%** para não assustar |
+| Atalhos | Percepção, Vantagem, Desvantagem e os que você criar (até 12) |
+
+**Restaurar padrões** (no fim do painel, com um segundo clique para confirmar) volta tudo ao
+padrão, menos o idioma e os atalhos.
 
 ## O caminho de uma rolagem
 
@@ -61,6 +86,12 @@ Edite com o app fechado. Valores fora do limite voltam ao padrão.
 - **Espectadores** veem a mesa e as rolagens públicas em tempo real, não rolam dados e não
   ocupam vaga de jogador. Não precisam de personagem.
 - O mestre é quem cria a sala. Se ele sair, o jogador mais antigo vira mestre.
+- **Remover alguém:** o mestre clica em `⋯` ao lado da pessoa, na lista da sala. **Remover**
+  tira da sala; **Remover e bloquear** também impede a volta dela (pelo IP) àquela sala.
+- **Voltar para a vaga:** quem fecha o navegador sem querer e abre o mesmo link de novo volta
+  como a mesma pessoa, na mesma mesa.
+- **Jackpot:** 3 ou mais dados com o mesmo número, ou um total com 3 dígitos iguais (111, 777),
+  fazem uma animação de jackpot. Só vale com dados rolados; conta pura, como `100+11`, não conta.
 
 ## Mudando textos, cores e visual
 

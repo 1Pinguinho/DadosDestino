@@ -91,3 +91,57 @@
   --seat-a: #ffffff; --seat-b: #f7f3fa;
   --shadow: #5a4a6a;
 }
+
+[data-theme='blue'] {
+  color-scheme: dark;
+  --bg: #0a0e18; --bg-mid: #121a2c; --bg-glow: #1e3a6e;
+  --surface: #101624; --surface-2: #172034; --field: #0a0e18;
+  --ink: #eaf0fa; --muted: #a3b0c6; --faint: #6c7890; --line: #2b3852;
+  --accent: #8fb4f5; --accent-strong: #cfe0ff;
+  --action: #2f5bb0; --action-hover: #3d6fd0; --on-action: #f5f8ff;
+  --warm: #f0c283;
+  --table-border: #4d6491; --table-a: #172238; --table-b: #0d1220; --table-glow: #2a4a86;
+  --seat-a: #162036; --seat-b: #0d1321;
+  --shadow: #03050a;
+}
+
+[data-theme='teal'] {
+  color-scheme: dark;
+  --bg: #091213; --bg-mid: #0f1f20; --bg-glow: #155a58;
+  --surface: #0f1a1b; --surface-2: #152526; --field: #091213;
+  --ink: #e6f5f4; --muted: #9fbdbb; --faint: #678583; --line: #284442;
+  --accent: #6fd8cf; --accent-strong: #bff3ee;
+  --action: #1f7a73; --action-hover: #29938a; --on-action: #f1fbfa;
+  --warm: #f0b483;
+  --table-border: #3f7a75; --table-a: #142826; --table-b: #0b1516; --table-glow: #1e5a56;
+  --seat-a: #13292a; --seat-b: #0c1617;
+  --shadow: #020707;
+}
+
+[data-theme='gold'] {
+  color-scheme: dark;
+  --bg: #13100a; --bg-mid: #221c10; --bg-glow: #5a4314;
+  --surface: #1a160e; --surface-2: #241e13; --field: #13100a;
+  --ink: #f6efe0; --muted: #c2b394; --faint: #8a7d62; --line: #4a3f28;
+  --accent: #e8c26a; --accent-strong: #fbe4ad;
+  --action: #9a7420; --action-hover: #b48a2c; --on-action: #fffaf0;
+  --warm: #e8a07a;
+  --table-border: #8a7140; --table-a: #2a2214; --table-b: #17130b; --table-glow: #6a5220;
+  --seat-a: #2a2215; --seat-b: #18140c;
+  --shadow: #060402;
+}
+
+[data-theme='pink'] {
+  color-scheme: dark;
+  --bg: #140c12; --bg-mid: #26141f; --bg-glow: #5c1f48;
+  --surface: #1d121a; --surface-2: #281823; --field: #140c12;
+  --ink: #f8ecf3; --muted: #c4a3b6; --faint: #8c6e80; --line: #4a2e40;
+  --accent: #f29cc8; --accent-strong: #ffd3ea;
+  --action: #a3367a; --action-hover: #bf4790; --on-action: #fff5fa;
+  --warm: #f2c27e;
+  --table-border: #8a4b72; --table-a: #2e1a27; --table-b: #1a1017; --table-glow: #6e2a5a;
+  --seat-a: #2c1927; --seat-b: #1b1118;
+  --shadow: #0b0509;
+}
+
+/* "custom": as cores são calculadas por src/palette.js a partir das 3 cores escolhidas. */

@@ -8,7 +8,7 @@
     <AssemblyName>DadosDestino</AssemblyName>
     <RootNamespace>RolagemRpg</RootNamespace>
     <Product>Dados &amp; Destino</Product>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <!-- O pacote do WebView2 traz uma referência de WPF que este app não usa. -->
     <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>

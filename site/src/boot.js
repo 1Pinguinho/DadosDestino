@@ -1,17 +1,25 @@
-// Roda antes de a página aparecer: aplica o tema e o idioma salvos para a tela
-// não piscar com as cores ou o idioma padrão.
+// Roda antes de a página aparecer: aplica tema, cores personalizadas, zoom,
+// animações e idioma salvos, para a tela não piscar com o padrão.
+// Precisa de palette.js carregado antes.
 (function () {
-  var themes = ['purple', 'red', 'green', 'white', 'gray', 'black'];
+  var themes = ['purple', 'red', 'green', 'blue', 'teal', 'gold', 'pink', 'white', 'gray', 'black', 'custom'];
   var root = document.documentElement;
   try {
-    var theme = localStorage.getItem('dados-destino-theme');
+    var settings = JSON.parse(localStorage.getItem('dados-destino-settings') || '{}') || {};
     var language = localStorage.getItem('dados-destino-language');
-    root.dataset.theme = themes.indexOf(theme) >= 0 ? theme : 'purple';
+    var zoom = Number(settings.zoom);
+    root.dataset.theme = themes.indexOf(settings.theme) >= 0 ? settings.theme : 'purple';
+    if (root.dataset.theme === 'custom' && window.DadosPalette) {
+      window.DadosPalette.apply(root, 'custom', settings.custom);
+    }
+    if (zoom >= 0.7 && zoom <= 1.5 && zoom !== 1) {
+      root.style.zoom = String(zoom);
+    }
+    if (settings.animations === false) {
+      root.classList.add('reduce-motion');
+    }
     if (language === 'pt-BR' || language === 'en') {
       root.lang = language;
-    }
-    if (localStorage.getItem('dados-destino-animations') === 'off') {
-      root.classList.add('reduce-motion');
     }
   } catch (error) {
     root.dataset.theme = 'purple';

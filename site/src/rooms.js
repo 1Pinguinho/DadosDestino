@@ -2,6 +2,7 @@
 // entrar com código como jogador ou espectador, procurar salas públicas, o painel
 // da sala e o link de convite do anfitrião.
 import { t, errorText } from './i18n.js';
+import { getSettings } from './settings.js';
 
 const $ = (selector) => document.querySelector(selector);
 const nameInput = $('#player-name');
@@ -40,20 +41,46 @@ let searchTimer = 0;
 let lobbyTab = 'create';
 let lastFeedback = { element: null, key: '', params: {} };
 
-const session = {
-  get(key) {
-    try { return sessionStorage.getItem(key) || ''; } catch { return ''; }
-  },
-  set(key, value) {
-    try { sessionStorage.setItem(key, value); } catch { /* só nesta aba */ }
-  },
-  remove(key) {
-    try { sessionStorage.removeItem(key); } catch { /* só nesta aba */ }
-  },
-};
-let sessionRoomCode = session.get('dados-destino-room');
-let sessionPlayerToken = session.get('dados-destino-player-token');
-let sessionSpectator = session.get('dados-destino-spectator') === '1';
+// Vagas guardadas no navegador, por sala: fechar a aba e abrir o link de novo
+// devolve a mesma vaga (mesmo nome, personagem e papel).
+const seatsKey = 'dados-destino-seats';
+
+function readSeats() {
+  try {
+    const seats = JSON.parse(localStorage.getItem(seatsKey) || '{}');
+    return seats && typeof seats === 'object' ? seats : {};
+  } catch {
+    return {};
+  }
+}
+
+function savedSeat(code) {
+  const seat = code ? readSeats()[code] : null;
+  return seat && typeof seat.token === 'string' ? seat : null;
+}
+
+function writeSeats(seats) {
+  try {
+    // Guarda só as 20 salas mais recentes.
+    const recent = Object.entries(seats).sort((left, right) => (right[1].at || 0) - (left[1].at || 0)).slice(0, 20);
+    localStorage.setItem(seatsKey, JSON.stringify(Object.fromEntries(recent)));
+  } catch {
+    // Sem armazenamento: a vaga vale só enquanto a página estiver aberta.
+  }
+}
+
+function rememberSeat(code, seat) {
+  writeSeats({ ...readSeats(), [code]: { ...seat, at: Date.now() } });
+}
+
+function forgetSeat(code) {
+  const seats = readSeats();
+  delete seats[code];
+  writeSeats(seats);
+}
+
+let activeToken = '';
+const returningSeat = savedSeat(roomParameter);
 
 try {
   nameInput.value = localStorage.getItem('dados-destino-player-name') || '';
@@ -61,11 +88,10 @@ try {
 } catch {
   // Sem armazenamento: campos começam vazios.
 }
-// Voltando para a sala nesta aba: usa o nome com que entrou nela (outra aba pode
-// ter salvo outro nome no navegador).
-if (roomParameter && sessionRoomCode === roomParameter) {
-  nameInput.value = session.get('dados-destino-name') || nameInput.value;
-  characterInput.value = session.get('dados-destino-character') || characterInput.value;
+// Voltando para uma sala: usa o nome e o personagem com que entrou nela.
+if (returningSeat) {
+  nameInput.value = returningSeat.name || nameInput.value;
+  characterInput.value = returningSeat.character || characterInput.value;
 }
 
 const connection = new window.signalR.HubConnectionBuilder()
@@ -238,7 +264,8 @@ $('#panel-create').addEventListener('submit', async (event) => {
       maxPlayers: createMaxPlayers,
       isPublic: createPublic,
       allowSpectators: $('#allow-spectators').checked,
-      reconnectToken: sessionPlayerToken || null,
+      reconnectToken: null,
+      color: getSettings().seatColor,
     });
     enteredRoom(result, false);
   } catch (error) {
@@ -270,15 +297,22 @@ async function joinRoom(code, asSpectator, { silent = false } = {}) {
     const characterName = readCharacter(asSpectator);
     lockLobby(true);
     await ensureConnection();
+    // Só reaproveita a vaga guardada se for o mesmo papel (jogador ou espectador).
+    const seat = savedSeat(code);
     const result = await connection.invoke('JoinRoom', {
       code,
       playerName,
       characterName: characterName || null,
       asSpectator,
-      reconnectToken: code === sessionRoomCode && sessionPlayerToken ? sessionPlayerToken : null,
+      reconnectToken: seat && Boolean(seat.spectator) === asSpectator ? seat.token : null,
+      color: getSettings().seatColor,
     });
     enteredRoom(result, asSpectator);
   } catch (error) {
+    // A vaga guardada não serve mais (a sala acabou ou a pessoa foi bloqueada).
+    if (silent) {
+      forgetSeat(code);
+    }
     sayError(lobbyFeedback, error, 'room.joinFailed');
   } finally {
     lockLobby(false);
@@ -292,14 +326,13 @@ $('#panel-join').addEventListener('submit', (event) => {
 
 function enteredRoom(result, asSpectator) {
   const room = result.room;
-  sessionPlayerToken = result.reconnectToken;
-  sessionRoomCode = room.code;
-  sessionSpectator = Boolean(room.isSpectator ?? asSpectator);
-  session.set('dados-destino-room', room.code);
-  session.set('dados-destino-player-token', sessionPlayerToken);
-  session.set('dados-destino-spectator', sessionSpectator ? '1' : '0');
-  session.set('dados-destino-name', nameInput.value.trim());
-  session.set('dados-destino-character', characterInput.value.trim());
+  activeToken = result.reconnectToken;
+  rememberSeat(room.code, {
+    token: activeToken,
+    name: nameInput.value.trim(),
+    character: characterInput.value.trim(),
+    spectator: Boolean(room.isSpectator ?? asSpectator),
+  });
   const url = new URL(location.href);
   url.searchParams.set('room', room.code);
   history.replaceState(null, '', url);
@@ -429,17 +462,61 @@ function syncPrivateRollButtons() {
   setPressed(rollVisibility, 'data-visibility', privateRoll ? 'private' : 'public');
 }
 
-function personLine(text, tags) {
+// Pessoa que o mestre está gerenciando (mostra as ações de remover na linha dela).
+let managingId = '';
+
+function personLine(text, tags, person = null) {
   const item = document.createElement('li');
+  const row = document.createElement('div');
   const label = document.createElement('span');
+  row.className = 'person-row';
   label.className = 'person-name';
   label.textContent = text;
-  item.append(label);
+  row.append(label);
   for (const tag of tags) {
     const chip = document.createElement('span');
     chip.className = `person-tag${tag.className ? ` ${tag.className}` : ''}`;
     chip.textContent = tag.text;
-    item.append(chip);
+    row.append(chip);
+  }
+  item.append(row);
+  if (person) {
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'person-manage';
+    manage.textContent = '⋯';
+    manage.setAttribute('aria-label', t('room.manage', { name: person.name }));
+    manage.setAttribute('aria-expanded', String(managingId === person.id));
+    manage.addEventListener('click', () => {
+      managingId = managingId === person.id ? '' : person.id;
+      renderRoomPanel(activeRoom);
+    });
+    row.append(manage);
+    if (managingId === person.id) {
+      const actions = document.createElement('div');
+      actions.className = 'person-actions';
+      const kick = (ban) => async () => {
+        managingId = '';
+        try {
+          await connection.invoke('KickPlayer', { playerId: person.id, ban });
+        } catch (error) {
+          sayError(roomFeedback, error, 'room.joinFailed');
+        }
+      };
+      for (const [key, handler, className] of [
+        ['room.kick', kick(false), ''],
+        ['room.kickBan', kick(true), 'is-danger'],
+        ['room.cancel', () => { managingId = ''; renderRoomPanel(activeRoom); }, 'is-quiet'],
+      ]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `person-action ${className}`.trim();
+        button.textContent = t(key);
+        button.addEventListener('click', handler);
+        actions.append(button);
+      }
+      item.append(actions);
+    }
   }
   return item;
 }
@@ -452,15 +529,23 @@ function renderRoomPanel(room) {
   $('#active-room-code').textContent = room.code;
   $('#player-count').textContent = `${room.players.length} / ${room.maxPlayers}`;
 
+  // O mestre pode remover qualquer pessoa, menos ele mesmo.
+  const manageable = (id) => room.isMaster && id !== room.myPlayerId;
+  if (managingId && ![...room.players, ...(room.spectators || [])].some((person) => person.id === managingId)) {
+    managingId = '';
+  }
   playerList.replaceChildren(...room.players.map((player) => {
     const tags = [];
     if (player.id === room.myPlayerId) tags.push({ text: t('room.you'), className: 'is-you' });
     if (player.isMaster) tags.push({ text: t('room.master'), className: 'is-master' });
     if (!player.isOnline) tags.push({ text: t('room.offline'), className: 'is-offline' });
-    const line = personLine(`${player.characterName} (${player.name})`, tags);
+    const line = personLine(`${player.characterName} (${player.name})`, tags, manageable(player.id) ? player : null);
     line.classList.toggle('is-offline', !player.isOnline);
+    line.dataset.color = player.color || '';
     return line;
   }));
+  const me = room.players.find((player) => player.id === room.myPlayerId);
+  window.dispatchEvent(new CustomEvent('my-seat-color', { detail: me?.color || null }));
 
   const spectators = room.spectators || [];
   $('#spectator-block').hidden = spectators.length === 0;
@@ -469,7 +554,7 @@ function renderRoomPanel(room) {
     const tags = [];
     if (spectator.id === room.myPlayerId) tags.push({ text: t('room.you'), className: 'is-you' });
     if (!spectator.isOnline) tags.push({ text: t('room.offline'), className: 'is-offline' });
-    return personLine(spectator.name, tags);
+    return personLine(spectator.name, tags, manageable(spectator.id) ? spectator : null);
   }));
 
   roomSettings.hidden = !room.isMaster;
@@ -543,25 +628,39 @@ function renderRoom(room) {
   window.dispatchEvent(new CustomEvent('room-state', { detail: room }));
 }
 
+// Volta para o lobby (saiu, foi removido ou a sala acabou) e esquece a vaga.
+function backToLobby(messageKey) {
+  if (activeRoom) {
+    forgetSeat(activeRoom.code);
+  }
+  activeToken = '';
+  managingId = '';
+  renderRoom(null);
+  codeInput.value = '';
+  const url = new URL(location.href);
+  url.searchParams.delete('room');
+  history.replaceState(null, '', url);
+  say(lobbyFeedback, messageKey);
+  selectTab(lobbyTab);
+}
+
 $('#leave-room').addEventListener('click', async () => {
   try {
     await connection.invoke('LeaveRoom');
-    renderRoom(null);
-    sessionRoomCode = '';
-    sessionPlayerToken = '';
-    session.remove('dados-destino-room');
-    session.remove('dados-destino-player-token');
-    session.remove('dados-destino-spectator');
-    session.remove('dados-destino-name');
-    session.remove('dados-destino-character');
-    codeInput.value = '';
-    const url = new URL(location.href);
-    url.searchParams.delete('room');
-    history.replaceState(null, '', url);
-    say(lobbyFeedback, 'room.left');
-    selectTab(lobbyTab);
+    backToLobby('room.left');
   } catch {
     say(roomFeedback, 'room.leaveFailed');
+  }
+});
+
+// O mestre mudou a cor desta mesa nas configurações.
+window.addEventListener('seat-color-pick', async (event) => {
+  if (activeRoom && !activeRoom.isSpectator) {
+    try {
+      await connection.invoke('SetPlayerColor', event.detail);
+    } catch (error) {
+      sayError(roomFeedback, error, 'room.joinFailed');
+    }
   }
 });
 
@@ -741,6 +840,13 @@ connection.on('ReceiveRoll', (roll) => {
   window.dispatchEvent(new CustomEvent('room-shared-roll', { detail: roll }));
 });
 
+// O mestre tirou esta pessoa da sala.
+connection.on('Kicked', (info) => {
+  if (activeRoom && info?.code === activeRoom.code) {
+    backToLobby(info.banned ? 'room.kickedBanned' : 'room.kicked');
+  }
+});
+
 connection.onreconnecting(() => setConnectionStatus(false, 'status.reconnecting'));
 connection.onreconnected(async () => {
   setConnectionStatus(true, 'status.connected');
@@ -753,14 +859,13 @@ connection.onreconnected(async () => {
       playerName: nameInput.value.trim(),
       characterName: activeRoom.isSpectator ? null : characterInput.value.trim(),
       asSpectator: Boolean(activeRoom.isSpectator),
-      reconnectToken: sessionPlayerToken,
+      reconnectToken: activeToken,
+      color: null,
     });
-    sessionPlayerToken = result.reconnectToken;
-    session.set('dados-destino-player-token', sessionPlayerToken);
+    activeToken = result.reconnectToken;
     renderRoom(result.room);
   } catch {
-    renderRoom(null);
-    say(lobbyFeedback, 'room.closed');
+    backToLobby('room.closed');
   }
 });
 connection.onclose(() => setConnectionStatus(false, 'status.disconnected'));
@@ -775,9 +880,9 @@ async function startRoomConnection() {
       // Servidor antigo: mantém os limites padrão.
     }
     renderCreateOptions();
-    // Recarregou a página dentro de uma sala: volta com a mesma identidade.
-    if (roomParameter && sessionRoomCode === roomParameter && nameInput.value.trim()) {
-      await joinRoom(roomParameter, sessionSpectator, { silent: true });
+    // Já esteve nesta sala neste navegador: volta para a mesma vaga.
+    if (returningSeat && nameInput.value.trim()) {
+      await joinRoom(roomParameter, Boolean(returningSeat.spectator), { silent: true });
     }
   } catch {
     setConnectionStatus(false, 'status.offline');
@@ -796,7 +901,10 @@ export function createRoomManager({ onRoomRoll, onRoomHistory, onRoomState }) {
     codeInput.value = roomParameter;
     selectTab('join');
     // Chegou por um convite: só falta o nome para entrar.
-    if (sessionRoomCode !== roomParameter) {
+    if (returningSeat) {
+      joinAsSpectator = Boolean(returningSeat.spectator);
+      setPressed($('#join-role'), 'data-spectator', joinAsSpectator);
+    } else {
       say(lobbyFeedback, 'join.invited');
       (nameInput.value ? (characterInput.value ? $('#panel-join .lobby-submit') : characterInput) : nameInput).focus();
     }

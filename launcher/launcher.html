@@ -78,10 +78,13 @@
         </section>
       </div>
 
-      <p id="status" class="status" role="status" aria-live="polite" data-message="{{MESSAGE}}" data-detail="{{DETAIL}}"></p>
+      <p id="status" class="status" role="status" aria-live="polite" data-message="{{MESSAGE}}" data-detail="{{DETAIL}}" data-look="{{LOOK}}"></p>
       <p class="hint" data-t="hint"></p>
     </main>
 
+    <script>
+      /*{{PALETTE}}*/
+    </script>
     <script>
       const texts = {
         'pt-BR': {
@@ -148,7 +151,7 @@
       document.querySelectorAll('[data-lang]').forEach((button) => button.addEventListener('click', () => {
         language = button.dataset.lang;
         render();
-        webview.postMessage({ action: 'settings', language });
+        webview.postMessage({ action: 'language', language });
       }));
 
       document.querySelector('#host').addEventListener('click', () => {
@@ -175,6 +178,14 @@
         }
       });
 
+      // Tema personalizado e zoom escolhidos na mesa.
+      try {
+        const look = JSON.parse(status.dataset.look || '{}');
+        if (window.DadosPalette) window.DadosPalette.apply(document.documentElement, look.theme, look.custom);
+        if (look.zoom && look.zoom !== 1) document.documentElement.style.zoom = String(look.zoom);
+      } catch (error) {
+        // Sem cores salvas: fica o tema padrão.
+      }
       render();
     </script>
   </body>

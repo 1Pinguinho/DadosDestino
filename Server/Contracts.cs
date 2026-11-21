@@ -10,20 +10,26 @@ public sealed record CreateRoomRequest(
     int MaxPlayers,
     bool IsPublic,
     bool AllowSpectators,
-    string? ReconnectToken);
+    string? ReconnectToken,
+    string? Color);
 
 public sealed record JoinRoomRequest(
     string Code,
     string PlayerName,
     string? CharacterName,
     bool AsSpectator,
-    string? ReconnectToken);
+    string? ReconnectToken,
+    string? Color);
 
 public sealed record RoomSettingsRequest(string RoomName, int MaxPlayers, bool IsPublic, bool AllowSpectators);
 
+// O mestre remove alguém; com Ban, quem foi removido não volta para esta sala.
+public sealed record KickRequest(string PlayerId, bool Ban);
+
 public sealed record JoinResponse(RoomSnapshot Room, string ReconnectToken, string PlayerId);
 
-public sealed record RoomPlayer(string Id, string Name, string CharacterName, bool IsMaster, bool IsOnline, SharedRoll? LastRoll);
+// Color: a cor da mesa do jogador (uma das cores da lista em TableHub.PlayerColors).
+public sealed record RoomPlayer(string Id, string Name, string CharacterName, bool IsMaster, bool IsOnline, string Color, SharedRoll? LastRoll);
 
 public sealed record RoomSpectator(string Id, string Name, bool IsOnline);
 
@@ -65,6 +71,7 @@ public sealed record ServerLimits(int MaxPlayersPerRoom, int MaxSpectatorsPerRoo
 // Um dado da rolagem, para os outros verem a mesma animação (lados -1 = dado Fate).
 public sealed record RollDie(int Sides, double Value, double Natural, bool Used);
 
-public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice);
+public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor);
 
-public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice);
+// DiceColor: a cor dos dados de quem rolou ("classic" = uma cor por tipo de dado).
+public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor);
