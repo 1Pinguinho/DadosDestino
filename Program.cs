@@ -20,6 +20,14 @@ public static class Program
             return;
         }
 
+        // Uma cópia só do app: abrir de novo apenas traz a janela que já está aberta.
+        using var singleInstance = new Mutex(true, @"Local\DadosDestino.App", out var isFirstInstance);
+        if (!isFirstInstance)
+        {
+            BringExistingWindowToFront();
+            return;
+        }
+
         System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         System.Windows.Forms.Application.EnableVisualStyles();
         System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
@@ -28,6 +36,28 @@ public static class Program
         using var host = new HostSession();
         System.Windows.Forms.Application.Run(new MainWindow(host, hostOnStart));
     }
+
+    private static void BringExistingWindowToFront()
+    {
+        using var current = System.Diagnostics.Process.GetCurrentProcess();
+        foreach (var other in System.Diagnostics.Process.GetProcessesByName(current.ProcessName))
+        {
+            using (other)
+            {
+                if (other.Id != current.Id && other.MainWindowHandle != IntPtr.Zero)
+                {
+                    ShowWindow(other.MainWindowHandle, 9); // SW_RESTORE
+                    SetForegroundWindow(other.MainWindowHandle);
+                }
+            }
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr window, int command);
 
     public static WebApplication CreateServer(string[] args, string defaultUrl, TunnelManager? tunnel)
     {
@@ -321,7 +351,15 @@ public sealed class TableHub : Hub
                     }
                 }
                 room.LastActivityUtc = DateTime.UtcNow;
-                roster = CreateRoster(code, room);
+                if (room.Players.Count == 0)
+                {
+                    // Sala vazia sai na hora: ninguém consegue lotar o servidor criando e saindo de salas.
+                    Rooms.Remove(code);
+                }
+                else
+                {
+                    roster = CreateRoster(code, room);
+                }
             }
             Context.Items.Remove("roomCode");
             Context.Items.Remove("playerId");
