@@ -1,0 +1,12 @@
+{
+  "name": "rolagem-rpg",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@dice-roller/rpg-dice-roller": "^5.5.0"
+  }
+}

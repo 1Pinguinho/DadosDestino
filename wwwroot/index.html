@@ -1,0 +1,166 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100e14" />
+    <meta name="description" content="Uma mesa de rolagem de dados para suas aventuras de RPG." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css?v=dice-anim-2" />
+    <script type="importmap">
+      { "imports": { "@dice-roller/rpg-dice-roller": "https://esm.sh/@dice-roller/rpg-dice-roller@5.5.0" } }
+    </script>
+    <title>Dados & Destino | Rolagem de RPG</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#inicio" aria-label="Dados e Destino, início">
+          <span class="brand-mark" aria-hidden="true">D<span>20</span></span>
+          <span class="brand-name">DADOS <i>&</i> DESTINO</span>
+        </a>
+        <div class="table-status"><span id="connection-dot" class="status-dot"></span><span id="connection-status">CONECTANDO</span></div>
+      </header>
+
+      <main id="inicio" class="workspace">
+        <section class="page-heading" aria-labelledby="page-title">
+          <div class="eyebrow"><span>COMPÊNDIO DA MESA</span><span class="eyebrow-line"></span><span>VOL. 01</span></div>
+          <div class="intro-row">
+            <div>
+              <p class="chapter">SUA PRÓXIMA AVENTURA COMEÇA AQUI</p>
+              <h1 id="page-title">Role os dados.<br /><em>Decida o destino.</em></h1>
+            </div>
+            <div class="d20-stamp" aria-hidden="true"><span>20</span><small>NATURAL</small></div>
+          </div>
+        </section>
+
+        <section class="party-table" aria-labelledby="table-title">
+          <div class="table-head">
+            <div>
+              <p class="chapter">MESA DA CAMPANHA</p>
+              <h2 id="table-title">Aventureiros</h2>
+            </div>
+            <div class="table-head-actions">
+              <span id="party-table-count" class="table-count">SUA MESA</span>
+              <button id="clear-table-focus" class="table-focus-clear" type="button">SEM FOCO</button>
+            </div>
+          </div>
+          <div id="party-seats" class="party-seats">
+            <div class="table-empty">
+              <span class="table-emblem" aria-hidden="true">D20</span>
+              <span>Os lugares aguardam a próxima sessão.</span>
+              <small>Crie uma sala ou entre com um código.</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="roller" aria-labelledby="page-title">
+          <form id="roll-form" class="roll-form">
+            <label class="field-label" for="notation">NOTAÇÃO</label>
+            <div class="notation-row">
+              <input id="notation" name="notation" type="text" value="1d20" maxlength="120" autocomplete="off" spellcheck="false" aria-describedby="roll-feedback" />
+              <button class="roll-button" type="submit"><span aria-hidden="true">✳</span> Rolar</button>
+            </div>
+            <p id="roll-feedback" class="feedback" role="status" aria-live="polite"></p>
+            <div id="roll-visual" class="roll-visual" aria-hidden="true" hidden></div>
+
+            <div class="control-row">
+              <fieldset class="die-picker">
+                <legend class="field-label">DADO</legend>
+                <div class="die-options" role="group" aria-label="Escolha o tipo de dado">
+                  <button type="button" class="die-option" data-sides="4">d4</button>
+                  <button type="button" class="die-option" data-sides="6">d6</button>
+                  <button type="button" class="die-option" data-sides="8">d8</button>
+                  <button type="button" class="die-option" data-sides="10">d10</button>
+                  <button type="button" class="die-option" data-sides="12">d12</button>
+                  <button type="button" class="die-option is-selected" data-sides="20" aria-pressed="true">d20</button>
+                  <button type="button" class="die-option" data-sides="100">d100</button>
+                </div>
+              </fieldset>
+              <div class="number-field">
+                <label class="field-label" for="quantity">QUANTIDADE</label>
+                <input id="quantity" type="number" min="1" max="100" value="1" inputmode="numeric" />
+              </div>
+              <div class="number-field modifier-field">
+                <label class="field-label" for="modifier">MODIFICADOR</label>
+                <input id="modifier" type="number" min="-999" max="999" value="0" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div class="quick-rolls">
+              <span class="field-label">ATALHOS</span>
+              <div class="quick-options">
+                <button type="button" data-quick="1d20+5">Percepção <b>+5</b></button>
+                <button type="button" data-quick="2d20kh1">Vantagem <b>2d20</b></button>
+                <button type="button" data-quick="2d20kl1">Desvantagem <b>2d20</b></button>
+              </div>
+              <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="true">ANIMAÇÕES: LIGADAS</button>
+            </div>
+
+            <div id="table-roll-controls" class="table-roll-controls" hidden>
+              <label class="table-target-label" for="roll-target">ROLAR NA MESA
+                <select id="roll-target"></select>
+              </label>
+              <div id="roll-visibility" class="roll-visibility" role="group" aria-label="Visibilidade da rolagem" hidden>
+                <button type="button" data-visibility="public" aria-pressed="true">PÚBLICA</button>
+                <button type="button" data-visibility="private" aria-pressed="false">PRIVADA</button>
+              </div>
+            </div>
+          </form>
+
+          <div class="footer-note"><span>FEITO PARA A MESA</span><span class="footer-sigil">✳</span><span>QUE A SORTE ESTEJA CONTIGO</span></div>
+        </section>
+
+        <div class="right-rail">
+          <section id="room-panel" class="room-panel" aria-labelledby="room-title">
+            <div class="room-kicker"><span class="chapter">MESA AO VIVO</span><span id="room-connection-state">OFFLINE</span></div>
+            <h2 id="room-title">Jogue em grupo</h2>
+            <div id="room-join-view">
+              <label class="room-field" for="player-name">SEU NOME
+                <input id="player-name" type="text" maxlength="22" autocomplete="name" placeholder="Como te chamamos?" />
+              </label>
+              <label class="room-field" for="character-name">NOME DO PERSONAGEM
+                <input id="character-name" type="text" maxlength="30" autocomplete="off" placeholder="Quem está na aventura?" />
+              </label>
+              <label class="room-field" for="room-code">CÓDIGO DA SALA
+                <input id="room-code" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="EX.: K7M4Q2" />
+              </label>
+              <div class="room-actions">
+                <button id="create-room" class="room-button room-button-primary" type="button">Criar sala</button>
+                <button id="join-room" class="room-button" type="button">Entrar</button>
+              </div>
+            </div>
+            <div id="room-active-view" hidden>
+              <div class="room-code-row">
+                <div><span class="room-label">CÓDIGO DA SALA</span><strong id="active-room-code"></strong></div>
+                <button id="copy-room-link" class="copy-button" type="button" aria-label="Copiar convite da sala" title="Copiar convite">COPIAR</button>
+              </div>
+              <div class="players-heading"><span>NA MESA</span><span id="player-count">0 / 8</span></div>
+              <ul id="player-list" class="player-list" aria-label="Participantes da sala"></ul>
+              <button id="leave-room" class="leave-button" type="button">SAIR DA SALA</button>
+            </div>
+            <p id="room-feedback" class="room-feedback" role="status" aria-live="polite"></p>
+          </section>
+
+          <aside class="history" aria-labelledby="history-title">
+            <div class="history-heading">
+              <div>
+                <p class="chapter">REGISTRO DE CAMPANHA</p>
+                <h2 id="history-title">Histórico</h2>
+              </div>
+              <button id="clear-history" class="clear-button" type="button" title="Limpar histórico" aria-label="Limpar histórico">LIMPAR</button>
+            </div>
+            <div class="history-rule"></div>
+            <ol id="history-list" class="history-list" aria-label="Rolagens recentes"></ol>
+            <p id="history-empty" class="history-empty">As rolagens desta sessão<br />vão aparecer aqui.</p>
+            <div class="history-footer"><span class="status-dot"></span> <span id="history-count">0 REGISTROS</span></div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.17/dist/browser/signalr.min.js"></script>
+    <script type="module" src="/src/main.js?v=dice-anim-2"></script>
+  </body>
+</html>

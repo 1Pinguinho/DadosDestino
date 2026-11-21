@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DadosDestino</AssemblyName>
+    <RootNamespace>RolagemRpg</RootNamespace>
+    <Product>Dados &amp; Destino</Product>
+    <Version>1.0.0</Version>
+    <!-- O pacote do WebView2 traz uma referência de WPF que este app não usa. -->
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- O app serve o site a partir da própria pasta do executável. -->
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Arquivos dos testes em Node não fazem parte do app. -->
+    <Content Remove="package.json;tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+</Project>
