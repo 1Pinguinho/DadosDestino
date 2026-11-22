@@ -14,6 +14,7 @@ import { avatarUrl, currentAccount, initAccount, onAccountChange } from './accou
 import { initSheet } from './sheet.js';
 import { initNotes } from './notes.js';
 import { describeEffect, initRollKind } from './rollkind.js';
+import { initCombat } from './combat.js';
 
 initSettings();
 initTitlebar();
@@ -44,6 +45,7 @@ let feedbackKey = '';
 const localRollsInFlight = new Set();
 const serverEchoes = new Map();
 let rollKind = null;
+let combat = null;
 // Um lugar por jogador, reaproveitado entre atualizações para a animação não reiniciar.
 const seats = new Map();
 
@@ -449,7 +451,7 @@ function recordRoll(localRoll) {
   renderPartyTable({ ...partyState, rolls: [...otherRolls, roll] });
 }
 
-function rollDice(notation) {
+function rollDice(notation, override = null) {
   if (roomManager?.isSpectator()) {
     return;
   }
@@ -469,9 +471,15 @@ function rollDice(notation) {
     return;
   }
 
+  // O que a rolagem faz: o tipo escolhido no rolador vale primeiro; sem escolha, no
+  // combate a rolagem conta como o passo da vez (iniciativa, ataque, Reflexos, Medicina).
   let effect = { kind: 'normal' };
   try {
-    effect = rollKind?.read() || effect;
+    const chosen = rollKind?.read() || effect;
+    effect = override || (chosen.kind !== 'normal' ? chosen : combat?.rollEffect() || chosen);
+    if (combat?.needsDamageType() && effect.kind !== 'damage' && effect.kind !== 'recovery') {
+      throw new Error('combat.chooseDamage');
+    }
   } catch (error) {
     showFeedback(error.message);
     return;
@@ -613,6 +621,23 @@ initAccount({
 });
 initNotes(roomManager);
 rollKind = initRollKind({ getRoom: () => partyState, getSheet: () => sheets.active() });
+
+combat = initCombat({
+  manager: roomManager,
+  getRoom: () => partyState,
+  getSheet: () => sheets.active(),
+  rollNotation: (notation, override = null) => {
+    notationInput.value = notation;
+    showFeedback();
+    rollDice(notation, override);
+  },
+  selectDamage: (type) => {
+    rollKind.select(type);
+    showFeedback(type === 'magic' ? 'kind.chooseMana' : 'combat.thenRoll');
+    (type === 'magic' ? document.querySelector('#mana-cost') : notationInput).focus();
+  },
+  seatFor: (playerId) => seats.get(playerId)?.seat || null,
+});
 
 // Abas da sala: Mesa (rolagens), Ficha e Notas.
 const roomViews = document.querySelector('#room-views');

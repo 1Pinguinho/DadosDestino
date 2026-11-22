@@ -769,6 +769,10 @@ function renderRoom(room) {
   if (Array.isArray(room.notes)) {
     window.dispatchEvent(new CustomEvent('room-notes', { detail: room.notes }));
   }
+  // A sala completa traz o combate (null quando não há).
+  if (room.combat !== undefined) {
+    window.dispatchEvent(new CustomEvent('room-combat', { detail: room.combat }));
+  }
 }
 
 // Volta para o lobby (saiu, foi removido ou a sala acabou) e esquece a vaga.
@@ -978,6 +982,7 @@ connection.on('RoomUpdated', (roster) => {
       // A lista da sala não traz rolagens nem conversa: a mesa e o chat mantêm o que já mostram.
       rolls: [],
       chat: undefined,
+      combat: undefined,
     });
   }
 });
@@ -992,6 +997,12 @@ connection.on('ChatMessage', (message) => {
 
 connection.on('Reaction', (reaction) => {
   window.dispatchEvent(new CustomEvent('room-reaction', { detail: reaction }));
+});
+
+connection.on('CombatUpdated', (combat) => {
+  if (activeRoom) {
+    window.dispatchEvent(new CustomEvent('room-combat', { detail: combat }));
+  }
 });
 
 connection.on('NotesUpdated', (notes) => {

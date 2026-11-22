@@ -111,3 +111,15 @@ export function playOutcome(outcome) {
 
 // Ao soltar o controle de volume, toca um "tec" para a pessoa ouvir como ficou.
 window.addEventListener('volume-preview', () => playLand());
+
+// Combate: dois toques curtos quando chega a sua vez (ou quando você é atacado).
+export function playTurn() {
+  const volume = level();
+  const ctx = volume > 0 ? audio() : null;
+  if (!ctx || ctx.state !== 'running') {
+    return;
+  }
+  const now = ctx.currentTime;
+  tone(ctx, 660, now, 0.12, 0.14 * volume, 660, 'triangle');
+  tone(ctx, 880, now + 0.13, 0.18, 0.14 * volume, 880, 'triangle');
+}

@@ -69,7 +69,8 @@ public sealed record RoomSnapshot(
     IReadOnlyList<SharedRoll> Rolls,
     IReadOnlyList<ChatMessage> Chat,
     IReadOnlyList<RoomNote> Notes,
-    bool IsSaved);
+    bool IsSaved,
+    CombatView? Combat);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
 public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp);

@@ -17,7 +17,8 @@ export function initRollKind({ getRoom, getSheet }) {
 
   function update() {
     const room = getRoom();
-    const visible = Boolean(room?.code && !room.isSpectator && currentAccount());
+    // O mestre vê sempre (controla os chefes no combate, mesmo sem conta).
+    const visible = Boolean(room?.code && !room.isSpectator && (currentAccount() || room.isMaster));
     controls.hidden = !visible;
     if (!visible) {
       return;
@@ -66,6 +67,10 @@ export function initRollKind({ getRoom, getSheet }) {
       }
       const sheet = getSheet();
       if (!sheet) {
+        // Sem ficha (ex.: o mestre rolando pelo chefe): dano sem gastar EA.
+        if (DAMAGE.includes(kind.value)) {
+          return { kind: 'damage', damageType: kind.value, manaCost: 0 };
+        }
         throw new Error('kind.needSheet');
       }
       if (kind.value === 'recovery') {
@@ -112,6 +117,9 @@ export function describeEffect(roll, players = []) {
     const target = roll.effectTargetId && roll.effectTargetId !== roll.playerId ? nameOf(roll.effectTargetId) : '';
     const amount = Number.isFinite(roll.applied) ? `+${roll.applied} ` : '';
     return target ? t('effect.potionOn', { amount, stat, name: target }) : t('effect.potion', { amount, stat });
+  }
+  if (['attack', 'reflex', 'initiative', 'medicine'].includes(roll.kind)) {
+    return t(`effect.${roll.kind}`);
   }
   if (roll.kind === 'damage') {
     const type = t(`kind.${roll.damageType}`);

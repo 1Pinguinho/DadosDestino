@@ -6,7 +6,7 @@ namespace RolagemRpg;
 // Hub em tempo real das salas. Cada sala tem jogadores (cada um com sua mesa),
 // espectadores (só assistem) e o mestre (quem criou; pode rolar em qualquer mesa).
 // Tudo fica em memória e some quando o anfitrião fecha o app.
-public sealed class TableHub : Hub
+public sealed partial class TableHub : Hub
 {
     private const int MaxRollHistory = 20;
     private const int MaxRollDice = 10;
@@ -55,6 +55,7 @@ public sealed class TableHub : Hub
         this.config = config;
         this.hubContext = hubContext;
         maxSpectatorsSetting = config.MaxSpectatorsPerRoom;
+        EnsureCombatClock(hubContext);
     }
 
     public ServerLimits GetLimits() => new(config.MaxPlayersPerRoom, config.MaxSpectatorsPerRoom);
@@ -503,6 +504,8 @@ public sealed class TableHub : Hub
         string? damageType = null;
         var manaCost = 0;
         int? applied = null;
+        var combatChanged = false;
+        CombatView? combatView = null;
         lock (RoomsLock)
         {
             if (!Rooms.TryGetValue(code, out var room)
@@ -533,6 +536,7 @@ public sealed class TableHub : Hub
                 // Poção: soma na vida ou na mana atual de quem bebe (você ou outro jogador),
                 // sem passar do máximo. Caído (vida 0 ou menos) não passa de 0.
                 recoverStat = roll.RecoverStat is "hp" or "ea" ? roll.RecoverStat : throw new HubException("INVALID_ROLL");
+                CheckCombatPotion(room, actor);
                 var drinker = roll.EffectTargetId is null ? actor
                     : room.Players.TryGetValue(roll.EffectTargetId, out var found) && !found.IsSpectator ? found
                     : throw new HubException("TARGET_UNAVAILABLE");
@@ -572,6 +576,12 @@ public sealed class TableHub : Hub
                     manaCost = roll.ManaCost;
                     changedAccounts.Add(actor.AccountId!);
                 }
+            }
+
+            if (ApplyCombatRoll(room, actor, roll, kind, changedAccounts))
+            {
+                combatView = ViewOf(room);
+                combatChanged = true;
             }
 
             sharedRoll = new SharedRoll(
@@ -622,6 +632,10 @@ public sealed class TableHub : Hub
         foreach (var accountId in changedAccounts.Distinct())
         {
             await NotifyAccountChanged(hubContext, accountId);
+        }
+        if (combatChanged)
+        {
+            await Clients.Group(code).SendAsync("CombatUpdated", combatView);
         }
     }
 
@@ -983,7 +997,8 @@ public sealed class TableHub : Hub
             visibleRolls,
             room.Chat.ToArray(),
             room.Notes.ToArray(),
-            room.OwnerAccountId is not null);
+            room.OwnerAccountId is not null,
+            ViewOf(room));
     }
 
     private static RoomPlayer ToRoomPlayer(PlayerState player, SharedRoll? lastRoll)
@@ -1075,6 +1090,7 @@ public sealed class TableHub : Hub
         public List<SharedRoll> Rolls { get; } = new();
         public List<ChatMessage> Chat { get; } = new();
         public List<RoomNote> Notes { get; set; } = new();
+        public CombatState? Combat { get; set; }
         // Conta do mestre que criou a sala: com ela, a sala fica salva em disco.
         public string? OwnerAccountId { get; set; }
         public string Name { get; set; } = string.Empty;
