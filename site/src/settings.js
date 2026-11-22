@@ -26,11 +26,33 @@ function defaults() {
     volume: 20,
     ambient: true,
     ambientVolume: 30,
+    seatLook: { surface: 'plain', frame: 'simple', crest: 'none', weather: 'none', bg: null, accent: null },
     seatColor: null,
     diceColor: 'classic',
     diceCustom: { ...DICE_DEFAULTS },
     diceStyle: 'classic',
     shortcuts: null,
+  };
+}
+
+// Visual da mesa: as mesmas listas do servidor (SeatLook em Contracts.cs).
+export const SEAT_LOOK = {
+  surface: ['plain', 'felt', 'wood', 'stone', 'leather', 'marble', 'parchment', 'starry', 'metal'],
+  frame: ['simple', 'double', 'carved', 'runic', 'gold', 'thorns'],
+  crest: ['none', 'swords', 'skull', 'moon', 'crown', 'star', 'sun', 'anchor', 'leaf', 'cross', 'fleur', 'knight', 'yinyang'],
+  weather: ['none', 'embers', 'mist', 'snow', 'sparks', 'petals'],
+};
+
+export function cleanSeatLook(look) {
+  const value = look && typeof look === 'object' ? look : {};
+  const hex = (color) => (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : null);
+  return {
+    surface: SEAT_LOOK.surface.includes(value.surface) ? value.surface : 'plain',
+    frame: SEAT_LOOK.frame.includes(value.frame) ? value.frame : 'simple',
+    crest: SEAT_LOOK.crest.includes(value.crest) ? value.crest : 'none',
+    weather: SEAT_LOOK.weather.includes(value.weather) ? value.weather : 'none',
+    bg: hex(value.bg),
+    accent: hex(value.accent),
   };
 }
 
@@ -44,6 +66,7 @@ function normalize(value) {
   result.fullscreen = result.fullscreen === true;
   result.sound = result.sound !== false;
   result.volume = Number.isFinite(Number(result.volume)) ? Math.min(100, Math.max(0, Math.round(Number(result.volume)))) : base.volume;
+  result.seatLook = cleanSeatLook(result.seatLook);
   result.ambient = result.ambient !== false;
   result.ambientVolume = Number.isFinite(Number(result.ambientVolume)) ? Math.min(100, Math.max(0, Math.round(Number(result.ambientVolume)))) : base.ambientVolume;
   result.seatColor = COLORS.includes(result.seatColor) ? result.seatColor : null;

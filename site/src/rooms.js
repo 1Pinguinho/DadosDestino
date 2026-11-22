@@ -343,10 +343,25 @@ function enteredRoom(result, asSpectator) {
   clearInterval(searchTimer);
   say(roomFeedback);
   renderRoom(room);
+  sendSeatLook();
   if (room.rolls?.length) {
     window.dispatchEvent(new CustomEvent('room-shared-history', { detail: room.rolls }));
   }
 }
+
+// O visual da minha mesa vai para a sala (todos veem). Reenviado quando muda.
+let lookTimer = 0;
+function sendSeatLook() {
+  clearTimeout(lookTimer);
+  lookTimer = setTimeout(() => {
+    if (activeRoom && !activeRoom.isSpectator) {
+      connection.invoke('SetSeatLook', getSettings().seatLook).catch(() => {
+        // Servidor antigo ou sem conexão: a mesa fica com o visual padrão.
+      });
+    }
+  }, 300);
+}
+window.addEventListener('settingschange', sendSeatLook);
 
 // ---------- procurar salas ----------
 

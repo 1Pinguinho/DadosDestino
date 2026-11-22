@@ -1052,7 +1052,8 @@ public sealed partial class TableHub : Hub
             lastRoll,
             account?.Id,
             account?.AvatarVersion ?? 0,
-            account is null ? null : AccountStore.Instance.Status(account.Id));
+            account is null ? null : AccountStore.Instance.Status(account.Id),
+            player.Look);
     }
 
     private RoomRoster CreateRoster(string code)
@@ -1160,5 +1161,6 @@ public sealed partial class TableHub : Hub
         public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
         public DateTime LastReactionUtc { get; set; } = DateTime.MinValue;
         public string? AccountId { get; set; }
+        public SeatLook? Look { get; set; }
     }
 }

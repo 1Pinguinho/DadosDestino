@@ -57,6 +57,8 @@ public sealed class Preferences
     public string DiceStyle { get; set; } = "classic";
     public DiceColors DiceCustom { get; set; } = new();
     public List<Shortcut>? Shortcuts { get; set; }
+    // Visual da mesa (superfície, moldura, brasão, efeito e cores).
+    public SeatLookSettings? SeatLook { get; set; }
 
     public static Preferences Load()
     {
@@ -87,6 +89,7 @@ public sealed class Preferences
         DiceStyle = incoming.DiceStyle;
         DiceCustom = incoming.DiceCustom;
         Shortcuts = incoming.Shortcuts;
+        SeatLook = incoming.SeatLook;
         return before != JsonSerializer.Serialize(this);
     }
 
@@ -107,6 +110,8 @@ public sealed class Preferences
         Zoom = double.IsFinite(Zoom) ? Math.Round(Math.Clamp(Zoom, 0.7, 1.5), 2) : 1;
         Volume = Math.Clamp(Volume, 0, 100);
         AmbientVolume = Math.Clamp(AmbientVolume, 0, 100);
+        SeatLook = SeatLookSettings.From(new RolagemRpg.SeatLook(SeatLook?.Surface ?? "plain", SeatLook?.Frame ?? "simple",
+            SeatLook?.Crest ?? "none", SeatLook?.Weather ?? "none", SeatLook?.Bg, SeatLook?.Accent).Clean());
         SeatColor = SeatColor is not null && Colors.Contains(SeatColor) ? SeatColor : null;
         DiceColor = DiceColor is "classic" or "custom" || Colors.Contains(DiceColor) ? DiceColor : "classic";
         DiceStyle = TableHub.DiceStyles.Contains(DiceStyle) ? DiceStyle : "classic";
@@ -183,6 +188,22 @@ internal static class AppConfigFile
 }
 
 // Dados personalizados: cor da borda e degradê de dentro (do início ao fim).
+// Visual da mesa salvo nas preferências (conferido com as listas de SeatLook).
+public sealed class SeatLookSettings
+{
+    public string Surface { get; set; } = "plain";
+    public string Frame { get; set; } = "simple";
+    public string Crest { get; set; } = "none";
+    public string Weather { get; set; } = "none";
+    public string? Bg { get; set; }
+    public string? Accent { get; set; }
+
+    public static SeatLookSettings From(SeatLook look) => new()
+    {
+        Surface = look.Surface, Frame = look.Frame, Crest = look.Crest, Weather = look.Weather, Bg = look.Bg, Accent = look.Accent,
+    };
+}
+
 public sealed class DiceColors
 {
     public const string DefaultEdge = "#ffd86a";

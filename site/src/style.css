@@ -1081,3 +1081,81 @@ button.status-badge:hover { border-color: #e0646e; text-decoration: line-through
 /* ---------- trilha ambiente ---------- */
 .ambient-scenes { flex-wrap: wrap; }
 .ambient-scenes button { flex: 1 1 80px; }
+
+/* ---------- visual da mesa (superfície, moldura, brasão e clima) ---------- */
+.player-seat { --look-base: var(--look-bg, color-mix(in srgb, var(--hue-color, var(--accent)) 26%, var(--surface))); --look-trim: var(--look-accent, var(--hue-color, var(--accent))); }
+/* Base: a cor escolhida misturada com as cores do tema, para o texto continuar legível. */
+.player-seat:not([data-surface='plain']), .player-seat[data-surface='plain'][style*='--look-bg'] {
+  background-color: var(--seat-b);
+  background-image: var(--surface-pattern, none),
+    radial-gradient(ellipse at 50% 62%, color-mix(in srgb, var(--look-trim) 14%, transparent) 0, transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--look-base) 82%, var(--seat-a)), color-mix(in srgb, var(--look-base) 66%, var(--seat-b)));
+  background-size: var(--surface-size, auto), auto, auto;
+}
+.player-seat[data-surface='felt'] { --surface-pattern: radial-gradient(ellipse at 50% 45%, #ffffff10, transparent 62%), repeating-linear-gradient(45deg, #00000012 0 2px, transparent 2px 4px); }
+.player-seat[data-surface='wood'] { --surface-pattern: repeating-linear-gradient(90deg, #0000002e 0 2px, transparent 2px 23px), repeating-linear-gradient(90deg, #ffffff0a 0 1px, transparent 1px 9px), linear-gradient(180deg, #00000026, transparent 40%, #00000033); }
+.player-seat[data-surface='stone'] { --surface-pattern: radial-gradient(circle at 20% 30%, #ffffff12 0 2px, transparent 3px), radial-gradient(circle at 70% 60%, #00000040 0 2px, transparent 3px), linear-gradient(160deg, #ffffff0d, #00000040); --surface-size: 37px 41px, 29px 31px, auto; }
+.player-seat[data-surface='stone'] { background-size: 37px 41px, 29px 31px, auto, auto, auto; }
+.player-seat[data-surface='leather'] { --surface-pattern: radial-gradient(ellipse at center, transparent 48%, #00000059), repeating-linear-gradient(0deg, #0000000f 0 1px, transparent 1px 3px); }
+.player-seat[data-surface='marble'] { --surface-pattern: linear-gradient(115deg, transparent 40%, #ffffff1f 42%, transparent 44%), linear-gradient(35deg, transparent 60%, #ffffff14 61%, transparent 63%), linear-gradient(150deg, transparent 20%, #0000002e 22%, transparent 25%), linear-gradient(80deg, transparent 70%, #ffffff10 71%, transparent 73%); }
+.player-seat[data-surface='parchment'] { --surface-pattern: radial-gradient(ellipse at center, #ffe6b41f, #3c280a5c), repeating-linear-gradient(0deg, #00000008 0 1px, transparent 1px 5px); }
+.player-seat[data-surface='starry'] { --surface-pattern: radial-gradient(1px 1px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fffc, transparent), radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent), radial-gradient(1px 1px at 85% 65%, #fffb, transparent), radial-gradient(1px 1px at 10% 85%, #fff9, transparent), radial-gradient(1px 1px at 55% 45%, #fffa, transparent); --surface-size: 140px 120px; }
+.player-seat[data-surface='starry'] { background-size: 140px 120px, 140px 120px, 140px 120px, 140px 120px, 140px 120px, 140px 120px, auto, auto; background-image: radial-gradient(1px 1px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fffc, transparent), radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent), radial-gradient(1px 1px at 85% 65%, #fffb, transparent), radial-gradient(1px 1px at 10% 85%, #fff9, transparent), radial-gradient(1px 1px at 55% 45%, #fffa, transparent), radial-gradient(ellipse at 50% 62%, color-mix(in srgb, var(--look-trim) 14%, transparent) 0, transparent 62%), linear-gradient(135deg, color-mix(in srgb, var(--look-base) 82%, var(--seat-a)), color-mix(in srgb, var(--look-base) 66%, var(--seat-b))); }
+.player-seat[data-surface='metal'] { --surface-pattern: repeating-linear-gradient(90deg, #ffffff0a 0 1px, #0000000d 1px 2px), linear-gradient(180deg, #ffffff1f, #00000040); }
+
+/* Molduras: na cor de detalhe (ou na cor da mesa). */
+.player-seat.player-seat[data-frame='double'] { border: 4px double color-mix(in srgb, var(--look-trim) 70%, transparent); }
+.player-seat.player-seat[data-frame='carved'] { border: 1px solid color-mix(in srgb, var(--look-trim) 60%, transparent); box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--look-trim) 14%, transparent), inset 0 0 0 4px color-mix(in srgb, var(--look-trim) 40%, transparent), 0 10px 26px color-mix(in srgb, var(--shadow) 30%, transparent); }
+.player-seat.player-seat[data-frame='runic'] { border: 1px dashed color-mix(in srgb, var(--look-trim) 75%, transparent); box-shadow: inset 0 0 18px color-mix(in srgb, var(--look-trim) 18%, transparent), 0 10px 26px color-mix(in srgb, var(--shadow) 30%, transparent); }
+.player-seat.player-seat[data-frame='gold'] { border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 0 0 2px color-mix(in srgb, var(--look-trim) 85%, #fff2), inset 0 0 0 1px color-mix(in srgb, var(--look-trim) 35%, transparent), 0 0 18px color-mix(in srgb, var(--look-trim) 22%, transparent), 0 10px 26px color-mix(in srgb, var(--shadow) 30%, transparent); }
+.player-seat.player-seat[data-frame='thorns'] { border: 2px dotted color-mix(in srgb, var(--look-trim) 75%, transparent); box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--look-trim) 8%, transparent), inset 0 0 0 6px color-mix(in srgb, var(--look-trim) 30%, transparent), 0 10px 26px color-mix(in srgb, var(--shadow) 30%, transparent); }
+.seat-corners { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.seat-corners i { position: absolute; color: color-mix(in srgb, var(--look-trim) 80%, transparent); font: normal 11px/1 var(--serif); text-shadow: 0 0 6px color-mix(in srgb, var(--look-trim) 50%, transparent); }
+.seat-corners [data-corner='tl'] { top: 5px; left: 6px; }
+.seat-corners [data-corner='tr'] { top: 5px; right: 6px; }
+.seat-corners [data-corner='bl'] { bottom: 5px; left: 6px; }
+.seat-corners [data-corner='br'] { bottom: 5px; right: 6px; }
+
+/* Brasão em marca-d'água, atrás dos dados. */
+.seat-crest { position: absolute; z-index: 0; left: 50%; top: 58%; color: color-mix(in srgb, var(--look-trim) 70%, var(--ink)); font: 400 120px/1 var(--serif); opacity: .08; pointer-events: none; transform: translate(-50%, -50%); user-select: none; }
+
+/* Efeitos de clima: poucas partículas, devagar. Somem com "Animações" desligadas. */
+.seat-weather { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.seat-weather i { position: absolute; left: var(--x); display: block; border-radius: 50%; opacity: 0; animation: var(--speed) linear var(--delay) infinite both; }
+.player-seat[data-weather='embers'] .seat-weather i { bottom: -6px; width: calc(4px * var(--size)); height: calc(4px * var(--size)); background: #ffb347; box-shadow: 0 0 6px #ff7b29; animation-name: weather-rise; }
+.player-seat[data-weather='sparks'] .seat-weather i { top: var(--y); width: calc(3px * var(--size)); height: calc(3px * var(--size)); background: color-mix(in srgb, var(--look-trim) 60%, #fff); box-shadow: 0 0 6px var(--look-trim); animation-name: weather-twinkle; }
+.player-seat[data-weather='snow'] .seat-weather i { top: -6px; width: calc(4px * var(--size)); height: calc(4px * var(--size)); background: #f4f8ff; animation-name: weather-fall; }
+.player-seat[data-weather='petals'] .seat-weather i { top: -10px; width: calc(7px * var(--size)); height: calc(5px * var(--size)); border-radius: 70% 0; background: color-mix(in srgb, var(--look-trim) 50%, #ffb7c8); animation-name: weather-petal; }
+.player-seat[data-weather='mist'] .seat-weather i { top: calc(var(--y) * .8 + 20%); left: -40%; width: calc(140px * var(--size)); height: calc(36px * var(--size)); background: color-mix(in srgb, var(--ink) 9%, transparent); filter: blur(10px); animation-name: weather-drift; animation-duration: calc(var(--speed) * 3); }
+@keyframes weather-rise { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: .9; } 100% { opacity: 0; transform: translate(12px, -240px); } }
+@keyframes weather-fall { 0% { opacity: 0; transform: translateY(0); } 10% { opacity: .8; } 100% { opacity: .2; transform: translate(-14px, 260px); } }
+@keyframes weather-petal { 0% { opacity: 0; transform: translateY(0) rotate(0); } 10% { opacity: .85; } 100% { opacity: .1; transform: translate(30px, 260px) rotate(320deg); } }
+@keyframes weather-twinkle { 0%, 100% { opacity: 0; transform: scale(.4); } 50% { opacity: .9; transform: scale(1.2); } }
+@keyframes weather-drift { 0% { opacity: 0; transform: translateX(0); } 20%, 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(260%); } }
+html.reduce-motion .seat-weather { display: none; }
+
+/* Configurações: prévia e opções. */
+.seat-look-settings { display: grid; gap: 8px; }
+.look-preview { min-height: 92px; justify-content: center; align-items: center; padding: 12px; animation: none; }
+.look-preview::before, .look-preview::after { display: none; }
+.look-preview-name { position: relative; z-index: 1; font: 500 15px var(--serif); }
+.look-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.look-preset, .look-chip { min-height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
+.look-preset:hover, .look-chip:hover { border-color: var(--accent-line); color: var(--ink); }
+.look-preset[aria-pressed='true'], .look-chip[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.look-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.look-chips .look-chip { flex: 0 0 auto; }
+.look-colors { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.look-colors .check-row { grid-column: 1 / -1; margin-top: 4px; }
+.look-color { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--muted); font: 8px var(--mono); letter-spacing: .6px; }
+.look-color input { width: 40px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 3px; background: none; }
+.look-color input:disabled { opacity: .4; }
+/* Vez no combate, alvo e foco continuam visíveis em qualquer moldura. */
+.player-seat.player-seat.player-seat.is-turn { border-color: var(--accent); box-shadow: inset 0 1px var(--sheen), 0 0 0 1px var(--accent-glow), 0 0 22px var(--accent-glow); }
+.player-seat.player-seat.player-seat.is-target { border-color: var(--warm); }
+.player-seat.player-seat.player-seat.is-focused { border-color: var(--accent); }/* Fundo próprio escuro: texto claro; fundo próprio claro: texto escuro (em qualquer tema). */
+.player-seat[data-tone='dark'] { --ink: #f3eef6; --muted: #c4bccb; --faint: #958c9c; --sheen: #ffffff12; }
+.player-seat[data-tone='light'] { --ink: #1d1822; --muted: #4f4757; --faint: #776f7f; --sheen: #0000000f; }
+.player-seat[data-tone] .seat-name, .player-seat[data-tone] .look-preview-name { color: var(--ink); }.player-seat[data-tone='dark'] .seat-action { border-color: #ffffff2e; background: #00000030; color: var(--muted); }
+.player-seat[data-tone='light'] .seat-action { border-color: #0000002e; background: #ffffff59; color: var(--muted); }
+.player-seat[data-tone] .seat-action:hover { color: var(--ink); }

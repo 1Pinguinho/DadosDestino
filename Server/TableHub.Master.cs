@@ -72,6 +72,29 @@ public sealed partial class TableHub
         }
     }
 
+    // Visual da mesa do jogador (superfície, moldura, brasão, efeito e cores). Todos veem.
+    public async Task SetSeatLook(SeatLook look)
+    {
+        var clean = (look ?? SeatLook.Default).Clean();
+        var (code, playerId) = CurrentSeat();
+        RoomRoster roster;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(playerId, out var player)
+                || player.ConnectionId != Context.ConnectionId)
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            if (player.Look == clean)
+            {
+                return;
+            }
+            player.Look = clean;
+            roster = CreateRoster(code, room);
+        }
+        await Clients.Group(code).SendAsync("RoomUpdated", roster);
+    }
+
     // Trilha ambiente da mesa ("" = silêncio). Cada pessoa controla o próprio volume.
     private static readonly string[] AmbientScenes = { "", "rain", "fire", "wind", "tavern", "tension" };
 

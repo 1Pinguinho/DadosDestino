@@ -32,7 +32,28 @@ public sealed record JoinResponse(RoomSnapshot Room, string ReconnectToken, stri
 // AccountId/AvatarVersion: quem entrou com conta (foto em /api/avatars/{AccountId}).
 // Status: HP e EA da ficha ativa, para as barrinhas da mesa.
 public sealed record RoomPlayer(string Id, string Name, string CharacterName, bool IsMaster, bool IsOnline, string Color, SharedRoll? LastRoll,
-    string? AccountId, int AvatarVersion, SheetStatus? Status);
+    string? AccountId, int AvatarVersion, SheetStatus? Status, SeatLook? Look = null);
+
+// Visual da mesa do jogador: superfície, moldura, brasão, efeito e cores (opcionais).
+// Os nomes válidos ficam em SeatLook.Surfaces etc.; as cores são "#rrggbb" ou null (cor da mesa).
+public sealed record SeatLook(string Surface, string Frame, string Crest, string Weather, string? Bg, string? Accent)
+{
+    public static readonly string[] Surfaces = { "plain", "felt", "wood", "stone", "leather", "marble", "parchment", "starry", "metal" };
+    public static readonly string[] Frames = { "simple", "double", "carved", "runic", "gold", "thorns" };
+    public static readonly string[] Crests = { "none", "swords", "skull", "moon", "crown", "star", "sun", "anchor", "leaf", "cross", "fleur", "knight", "yinyang" };
+    public static readonly string[] Weathers = { "none", "embers", "mist", "snow", "sparks", "petals" };
+    private static readonly System.Text.RegularExpressions.Regex Hex = new("^#[0-9a-fA-F]{6}$");
+
+    public static SeatLook Default => new("plain", "simple", "none", "none", null, null);
+
+    public SeatLook Clean() => new(
+        Surfaces.Contains(Surface) ? Surface : "plain",
+        Frames.Contains(Frame) ? Frame : "simple",
+        Crests.Contains(Crest) ? Crest : "none",
+        Weathers.Contains(Weather) ? Weather : "none",
+        Bg is not null && Hex.IsMatch(Bg) ? Bg.ToLowerInvariant() : null,
+        Accent is not null && Hex.IsMatch(Accent) ? Accent.ToLowerInvariant() : null);
+}
 
 public sealed record ReopenRoomRequest(string Code, string PlayerName, string CharacterName, string? Color);
 

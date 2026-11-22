@@ -17,6 +17,7 @@ import { describeEffect, initRollKind } from './rollkind.js';
 import { initCombat } from './combat.js';
 import { initShield } from './shield.js';
 import { initAmbient } from './ambient.js';
+import { applySeatLook, initSeatLookSettings } from './seatlook.js';
 import { skillTest } from './sheet.js';
 import { playTurn } from './sound.js';
 
@@ -168,6 +169,7 @@ function updateSeat(entry, player, index, room, lastRoll) {
     }
   }
   updateSeatStatus(entry, player.status);
+  applySeatLook(entry.seat, player.look);
   entry.name.textContent = `${player.characterName} (${player.name})`;
   entry.presence.textContent = [
     player.isMaster ? t('room.master').toUpperCase() : '',
@@ -734,6 +736,7 @@ selectRoomView('table');
 
 initShield({ manager: roomManager });
 initAmbient();
+initSeatLookSettings();
 
 // Testes às cegas que o mestre pediu: um cartão por pedido, acima do rolador.
 const blindBox = document.querySelector('#blind-requests');
