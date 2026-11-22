@@ -41,12 +41,17 @@ function blankSheet() {
     skills: Object.fromEntries(SKILLS.map(([id]) => [id, { trained: 0, other: 0 }])),
     resist: { physical: 0, magic: 0, pierce: 0 },
     elements: '', extraElements: '',
-    skillPoints: 0, attributePoints: 0, abilityPoints: 0, attributeLimit: 0,
-    shortRests: 3, rests: [false, false, false],
-    initiative: '', reaction: '',
+    abilityPoints: 0,
+    initiative: '',
+    system: 'abismo', labels: {},
     effects: [], abilities: [], inventory: [],
     quickRolls: [],
   };
+}
+
+// Nome que aparece na ficha: o que o jogador escolheu ou o padrão do idioma.
+export function sheetLabel(sheet, key) {
+  return sheet?.labels?.[key] || t(key);
 }
 
 function el(tag, props = {}, ...children) {
@@ -75,6 +80,7 @@ export function initSheet() {
   let saving = false;
   let pendingSave = false;
   let armedDelete = false;
+  let renaming = false;
   let myPlayer = null;
   let roomPlayers = [];
   let statusLine = null;
@@ -193,13 +199,34 @@ export function initSheet() {
 
   // ---------- desenho ----------
 
-  function numberInput(value, onChange, { min = -9999, max = 9999, label = '' } = {}) {
+  function numberInput(value, onChange, { min = -9999, max = 9999, label = '', commit = 'input' } = {}) {
     const input = el('input', { type: 'number', min, max, value: String(value ?? 0), inputMode: 'numeric', 'aria-label': label });
-    input.addEventListener('input', () => {
+    // Campo vazio (ou só "-") conta como 0.
+    input.addEventListener(commit, () => {
       const parsed = Number.parseInt(input.value, 10);
-      if (Number.isFinite(parsed)) {
-        onChange(Math.min(max, Math.max(min, parsed)));
+      onChange(Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : 0)));
+    });
+    return input;
+  }
+
+  // Nome de um campo. No modo "Renomear" vira uma caixa de texto (vazia = nome padrão).
+  function labelNode(sheet, key, tag = 'span', className = '') {
+    if (!renaming) {
+      return el(tag, { class: className, text: sheetLabel(sheet, key) });
+    }
+    const input = el('input', {
+      type: 'text', class: `label-edit ${className}`.trim(), maxLength: 30, value: sheet.labels?.[key] || '',
+      placeholder: t(key), autocomplete: 'off', 'aria-label': `${t('sheet.renameField')}: ${t(key)}`,
+    });
+    input.addEventListener('input', () => {
+      sheet.labels ||= {};
+      const value = input.value.trim();
+      if (value) {
+        sheet.labels[key] = value;
+      } else {
+        delete sheet.labels[key];
       }
+      scheduleSave();
     });
     return input;
   }
@@ -210,8 +237,11 @@ export function initSheet() {
     return input;
   }
 
-  function field(labelKey, input) {
-    return el('label', { class: 'sheet-field' }, el('span', { text: t(labelKey) }), input);
+  function field(labelKey, input, sheet = null) {
+    if (sheet && renaming) {
+      return el('div', { class: 'sheet-field' }, labelNode(sheet, labelKey), input);
+    }
+    return el('label', { class: 'sheet-field' }, el('span', { text: sheet ? sheetLabel(sheet, labelKey) : t(labelKey) }), input);
   }
 
   function fold(key, open, ...content) {
@@ -223,7 +253,8 @@ export function initSheet() {
   function render() {
     view.replaceChildren();
     const head = el('div', { class: 'view-head' },
-      el('div', {}, el('p', { class: 'chapter', text: t('sheet.chapter') }), el('h2', { id: 'sheet-title', text: active()?.name || t('sheet.title') })));
+      el('div', {}, el('p', { class: 'chapter', text: active() ? `${t('sheet.chapter')} · ${t('system.abismo')}` : t('sheet.chapter') }),
+        el('h2', { id: 'sheet-title', text: active()?.name || t('sheet.title') })));
     view.append(head);
 
     if (!currentAccount()) {
@@ -277,6 +308,12 @@ export function initSheet() {
         scheduleSave();
       });
       tools.append(remove);
+      const rename = el('button', { class: 'room-button', type: 'button', text: t(renaming ? 'sheet.renameDone' : 'sheet.rename'), 'aria-pressed': String(renaming), title: t('sheet.renameHint') });
+      rename.addEventListener('click', () => {
+        renaming = !renaming;
+        render();
+      });
+      tools.append(rename);
     }
     statusLine = el('span', { class: 'sheet-save', role: 'status', 'aria-live': 'polite' });
     tools.append(statusLine);
@@ -320,9 +357,7 @@ export function initSheet() {
       current.dataset.current = stat;
       current.addEventListener('change', () => {
         const value = Number.parseInt(current.value, 10);
-        if (Number.isFinite(value)) {
-          setCurrent(stat, value);
-        }
+        setCurrent(stat, Number.isFinite(value) ? value : 0);
       });
       const max = numberInput(block.max, (value) => {
         const wasFull = block.current === block.max;
@@ -335,9 +370,9 @@ export function initSheet() {
         if (wasFull && value > block.current) {
           setCurrent(stat, value);
         }
-      }, { min: 0, max: 9999, label: `${t(`stat.${stat}`)} ${t('sheet.max')}` });
+      }, { min: 0, max: 9999, label: `${t(`stat.${stat}`)} ${t('sheet.max')}`, commit: 'change' });
       statusTable.append(el('div', { class: 'status-row', 'data-stat': stat },
-        el('strong', { text: t(`stat.${stat}`) }),
+        labelNode(sheet, `stat.${stat}`, 'strong'),
         max,
         current,
         el('output', { 'data-lost': stat }),
@@ -346,7 +381,7 @@ export function initSheet() {
     }
     // Recuperação manual: soma no atual, sem passar do máximo.
     const recoverAmount = el('input', { type: 'number', min: 1, max: 9999, value: '', inputMode: 'numeric', placeholder: '0', 'aria-label': t('sheet.recoverAmount') });
-    const recoverStat = el('select', { 'aria-label': t('kind.recoverStat') }, ...STATS.map((stat) => el('option', { value: stat, text: t(`stat.${stat}`) })));
+    const recoverStat = el('select', { 'aria-label': t('kind.recoverStat') }, ...STATS.map((stat) => el('option', { value: stat, text: sheetLabel(sheet, `stat.${stat}`) })));
     const recoverButton = el('button', { class: 'room-button', type: 'button', text: t('sheet.apply') });
     recoverButton.addEventListener('click', () => {
       const amount = Number.parseInt(recoverAmount.value, 10);
@@ -367,7 +402,7 @@ export function initSheet() {
     for (const id of ATTRIBUTES) {
       const value = sheet.attributes[id];
       attributes.append(el('div', { class: 'attribute-tile', 'data-attribute': id },
-        el('span', { class: 'attribute-name', text: t(`attr.${id}.name`) }),
+        labelNode(sheet, `attr.${id}.name`, 'span', 'attribute-name'),
         numberInput(value.value, change((next) => { value.value = next; }), { min: -99, max: 99, label: t(`attr.${id}.name`) }),
         el('label', { class: 'attribute-bonus' }, el('span', { text: t('sheet.bonus') }),
           numberInput(value.bonus, change((next) => { value.bonus = next; }), { min: -99, max: 99, label: `${t(`attr.${id}.name`)} ${t('sheet.bonus')}` }))));
@@ -383,7 +418,7 @@ export function initSheet() {
     for (const [id, attribute] of SKILLS) {
       const skill = sheet.skills[id];
       skills.append(el('div', { class: 'skill-row' },
-        el('span', { class: 'skill-name', text: t(`skill.${id}`) }),
+        labelNode(sheet, `skill.${id}`, 'span', 'skill-name'),
         el('span', { class: 'skill-attribute', 'data-attribute': attribute, text: t(`attr.${attribute}`) }),
         numberInput(skill.trained, change((value) => { skill.trained = value; }), { min: -99, max: 99, label: `${t(`skill.${id}`)} ${t('sheet.trained')}` }),
         numberInput(skill.other, change((value) => { skill.other = value; }), { min: -99, max: 99, label: `${t(`skill.${id}`)} ${t('sheet.other')}` }),
@@ -394,35 +429,12 @@ export function initSheet() {
     // Resistências e habilidades básicas.
     const resist = el('div', { class: 'sheet-grid' },
       ...['physical', 'magic', 'pierce'].map((id) => field(`resist.${id}`,
-        numberInput(sheet.resist[id], change((value) => { sheet.resist[id] = value; }), { min: 0, max: 999 }))));
-    const rests = el('div', { class: 'rest-boxes' });
-    const drawRests = () => {
-      rests.replaceChildren(...sheet.rests.map((used, index) => {
-        const box = el('input', { type: 'checkbox', checked: used, 'aria-label': `${t('sheet.rest')} ${index + 1}` });
-        box.addEventListener('change', () => {
-          sheet.rests[index] = box.checked;
-          scheduleSave();
-        });
-        return box;
-      }));
-    };
-    drawRests();
+        numberInput(sheet.resist[id], change((value) => { sheet.resist[id] = value; }), { min: 0, max: 999 }), sheet)));
     const basics = el('div', { class: 'sheet-grid' },
-      field('sheet.elements', textInput(sheet.elements, change((value) => { sheet.elements = value; }), { max: 80 })),
-      field('sheet.extraElements', textInput(sheet.extraElements, change((value) => { sheet.extraElements = value; }), { max: 80 })),
-      field('sheet.skillPoints', numberInput(sheet.skillPoints, change((value) => { sheet.skillPoints = value; }), { min: -999, max: 999 })),
-      field('sheet.attributePoints', numberInput(sheet.attributePoints, change((value) => { sheet.attributePoints = value; }), { min: -999, max: 999 })),
-      field('sheet.abilityPoints', numberInput(sheet.abilityPoints, change((value) => { sheet.abilityPoints = value; }), { min: -999, max: 999 })),
-      field('sheet.attributeLimit', numberInput(sheet.attributeLimit, change((value) => { sheet.attributeLimit = value; }), { min: 0, max: 99 })),
-      field('sheet.initiative', textInput(sheet.initiative, change((value) => { sheet.initiative = value; }), { max: 30, placeholder: '1d20+3' })),
-      field('sheet.reaction', textInput(sheet.reaction, change((value) => { sheet.reaction = value; }), { max: 40 })),
-      field('sheet.shortRests', numberInput(sheet.shortRests, (value) => {
-        sheet.shortRests = value;
-        sheet.rests = Array.from({ length: value }, (_, index) => Boolean(sheet.rests[index]));
-        drawRests();
-        scheduleSave();
-      }, { min: 0, max: 10 })),
-      el('div', { class: 'sheet-field' }, el('span', { text: t('sheet.restsUsed') }), rests));
+      field('sheet.elements', textInput(sheet.elements, change((value) => { sheet.elements = value; }), { max: 80 }), sheet),
+      field('sheet.extraElements', textInput(sheet.extraElements, change((value) => { sheet.extraElements = value; }), { max: 80 }), sheet),
+      field('sheet.abilityPoints', numberInput(sheet.abilityPoints, change((value) => { sheet.abilityPoints = value; }), { min: -999, max: 999 }), sheet),
+      field('sheet.initiative', textInput(sheet.initiative, change((value) => { sheet.initiative = value; }), { max: 30, placeholder: '1d20+3' }), sheet));
     view.append(fold('sheet.resistances', false, resist), fold('sheet.basics', false, basics));
 
     // Listas livres.
@@ -451,7 +463,7 @@ export function initSheet() {
           scheduleSave();
         }
       });
-      lists.append(el('div', { class: 'sheet-list' }, el('strong', { text: t(`sheet.list.${key}`) }), items, input));
+      lists.append(el('div', { class: 'sheet-list' }, labelNode(sheet, `sheet.list.${key}`, 'strong'), items, input));
     }
     view.append(fold('sheet.listsTitle', false, lists));
 
@@ -486,7 +498,8 @@ export function initSheet() {
         quick.lastElementChild?.querySelector('input')?.focus();
       }
     });
-    view.append(fold('sheet.quickRolls', true, el('p', { class: 'field-hint', text: t('sheet.quickHint') }), quick, addQuick));
+    // Ficam no topo da ficha, logo abaixo das ferramentas.
+    tools.after(fold('sheet.quickRolls', true, el('p', { class: 'field-hint', text: t('sheet.quickHint') }), quick, addQuick));
 
     refreshComputed();
   }

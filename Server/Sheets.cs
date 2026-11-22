@@ -66,14 +66,12 @@ public sealed class Sheet
     public Resistances Resist { get; set; } = new();
     public string Elements { get; set; } = string.Empty;
     public string ExtraElements { get; set; } = string.Empty;
-    public int SkillPoints { get; set; }
-    public int AttributePoints { get; set; }
     public int AbilityPoints { get; set; }
-    public int AttributeLimit { get; set; }
-    public int ShortRests { get; set; }
-    public List<bool> Rests { get; set; } = new();
     public string Initiative { get; set; } = string.Empty;
-    public string Reaction { get; set; } = string.Empty;
+    // Sistema da ficha e nomes trocados pelo jogador (ex.: "stat.ea" → "Mana").
+    // Sem entrada = nome padrão.
+    public string System { get; set; } = "abismo";
+    public Dictionary<string, string> Labels { get; set; } = new();
     public List<string> Effects { get; set; } = new();
     public List<string> Abilities { get; set; } = new();
     public List<string> Inventory { get; set; } = new();
@@ -125,19 +123,15 @@ public sealed class Sheet
         };
         Elements = Clean(Elements, 80);
         ExtraElements = Clean(ExtraElements, 80);
-        SkillPoints = Clamp(SkillPoints, -999, 999);
-        AttributePoints = Clamp(AttributePoints, -999, 999);
         AbilityPoints = Clamp(AbilityPoints, -999, 999);
-        AttributeLimit = Clamp(AttributeLimit, 0, 99);
-        ShortRests = Clamp(ShortRests, 0, 10);
-        Rests = (Rests ?? new()).Take(10).ToList();
-        while (Rests.Count < ShortRests)
-        {
-            Rests.Add(false);
-        }
-        Rests = Rests.Take(ShortRests).ToList();
         Initiative = Clean(Initiative, 30);
-        Reaction = Clean(Reaction, 40);
+        System = "abismo";
+        Labels = (Labels ?? new())
+            .Where(pair => pair.Key is { Length: > 0 and <= 40 } && pair.Key.All(character => char.IsAsciiLetterOrDigit(character) || character == '.'))
+            .Select(pair => (pair.Key, Value: Clean(pair.Value, 30)))
+            .Where(pair => pair.Value.Length > 0)
+            .Take(80)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         Effects = CleanList(Effects);
         Abilities = CleanList(Abilities);
         Inventory = CleanList(Inventory);

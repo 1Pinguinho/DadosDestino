@@ -18,6 +18,7 @@ import { initCombat } from './combat.js';
 import { initShield } from './shield.js';
 import { initAmbient } from './ambient.js';
 import { applySeatLook, initSeatLookSettings } from './seatlook.js';
+import { initHome } from './home.js';
 import { skillTest } from './sheet.js';
 import { playTurn } from './sound.js';
 
@@ -737,6 +738,7 @@ selectRoomView('table');
 initShield({ manager: roomManager });
 initAmbient();
 initSeatLookSettings();
+initHome();
 
 // Testes às cegas que o mestre pediu: um cartão por pedido, acima do rolador.
 const blindBox = document.querySelector('#blind-requests');

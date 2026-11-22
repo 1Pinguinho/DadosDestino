@@ -17,6 +17,9 @@ public sealed class HostSession : IDisposable
 
     public bool IsHosting => server is not null;
 
+    // Endereço da mesa neste computador (null antes de ligar).
+    public Uri? LocalUri => localUri;
+
     public async Task<Uri> StartAsync()
     {
         if (server is not null && localUri is not null)

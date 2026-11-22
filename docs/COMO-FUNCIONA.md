@@ -35,7 +35,7 @@ DadosDestino/
 │   │   └── style.css          visual e layout
 │   └── vendor/          bibliotecas de terceiros (rolagem, SignalR, fontes)
 ├── launcher/
-│   └── launcher.html    a tela inicial do app (hospedar ou entrar)
+│   └── launcher.html    tela de reserva do app (só aparece se a mesa não ligar)
 ├── docs/                este arquivo
 ├── config/              criada na primeira vez que o app abre
 │   ├── config.json      ajustes do servidor (veja abaixo)
@@ -87,7 +87,7 @@ padrão, menos o idioma e os atalhos.
 
 ## O caminho de uma rolagem
 
-1. Quem hospeda clica em **Hospedar mesa**. O app liga um servidor que só aceita conexões
+1. Ao abrir, o app liga um servidor que só aceita conexões
    do próprio computador e abre um túnel da Cloudflare, que gera um link `https://….trycloudflare.com`.
 2. Os amigos abrem o link no navegador. A Cloudflare leva cada pedido até o servidor do anfitrião.
 3. Quem rola calcula o resultado no próprio navegador, vê a animação e só então envia o resultado
@@ -131,8 +131,7 @@ padrão, menos o idioma e os atalhos.
 - **Cores de um tema:** `site/src/themes.css`. Cada tema é um bloco de variáveis.
 - **Layout:** `site/src/style.css`.
 
-As mudanças aparecem ao recarregar a mesa (F5 no navegador, ou voltar ao início e hospedar
-de novo no app).
+As mudanças aparecem ao recarregar a mesa (F5 no navegador, ou fechar e abrir o app de novo).
 
 ## Segurança, em resumo
 

@@ -2,7 +2,7 @@ using RolagemRpg;
 
 public static class Program
 {
-    // Sem argumentos: abre o app, com a tela para hospedar ou entrar numa mesa.
+    // Sem argumentos: abre o app direto na tela inicial (Jogar, Fichas, Personalização, Configurações).
     // Com --server: roda só o servidor, aberto na rede local, sem janela nem link da internet.
     [STAThread]
     public static void Main(string[] args)
@@ -26,11 +26,9 @@ public static class Program
         System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         System.Windows.Forms.Application.EnableVisualStyles();
         System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
-        // --hospedar pula a tela inicial e já abre hospedando (bom para um atalho).
-        var hostOnStart = args.Contains("--hospedar", StringComparer.OrdinalIgnoreCase);
         AppPaths.ReuseOldConnector();
         using var host = new HostSession(config);
-        System.Windows.Forms.Application.Run(new MainWindow(host, Preferences.Load(), hostOnStart));
+        System.Windows.Forms.Application.Run(new MainWindow(host, Preferences.Load()));
     }
 
     private static void BringExistingWindowToFront()

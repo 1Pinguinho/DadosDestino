@@ -118,4 +118,6 @@ public sealed class RoomNote
     public string Title { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public long UpdatedAt { get; set; }
+    // Fixada pelo mestre: fica no topo, na ordem em que foi fixada (0 = não fixada).
+    public long PinnedAt { get; set; }
 }

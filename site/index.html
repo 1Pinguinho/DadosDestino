@@ -110,7 +110,7 @@
                 <button id="settings-close" class="settings-close" type="button" data-i18n-aria="settings.close">×</button>
               </div>
               <div class="settings-body">
-                <section class="settings-section">
+                <section class="settings-section" data-group="config">
                   <span class="field-label" data-i18n="settings.language">IDIOMA</span>
                   <div class="segmented" role="group">
                     <button type="button" data-language="pt-BR" aria-pressed="true">Português (BR)</button>
@@ -118,7 +118,7 @@
                   </div>
                 </section>
 
-                <section class="settings-section">
+                <section class="settings-section" data-group="look">
                   <details class="settings-fold" data-fold="theme">
                     <summary><span class="field-label" data-i18n="settings.theme">TEMA</span><span class="fold-current"><span class="fold-swatch theme-swatch" id="theme-current-swatch"></span><span id="theme-current"></span></span></summary>
                     <div class="fold-body">
@@ -132,7 +132,7 @@
                   </details>
                 </section>
 
-                <section class="settings-section">
+                <section class="settings-section" data-group="config">
                   <div class="settings-row">
                     <span class="field-label" data-i18n="settings.zoom">ZOOM</span>
                     <div class="zoom-control">
@@ -148,7 +148,7 @@
                   </div>
                 </section>
 
-                <section class="settings-section">
+                <section class="settings-section" data-group="look">
                   <details class="settings-fold" data-fold="seat-color">
                     <summary><span class="field-label" data-i18n="settings.seatColor">COR DA SUA MESA</span><span class="fold-current"><span class="fold-swatch color-dot" id="seat-color-current-swatch"></span><span id="seat-color-current"></span></span></summary>
                     <div class="fold-body">
@@ -178,7 +178,7 @@
                   </details>
                 </section>
 
-                <section class="settings-section">
+                <section class="settings-section" data-group="config">
                   <div class="settings-row">
                     <span class="field-label" data-i18n="settings.animations">ANIMAÇÕES DOS DADOS</span>
                     <button id="motion-toggle" class="switch" type="button" aria-pressed="true">Ligadas</button>
@@ -210,7 +210,33 @@
       </header>
 
       <main id="inicio" class="workspace">
-        <!-- Antes de entrar numa sala: criar, entrar com código ou procurar -->
+        <!-- Tela inicial: Jogar, Fichas, Personalização e Configurações -->
+        <section id="home" class="home" aria-labelledby="home-title">
+          <div class="lobby-hero">
+            <p class="chapter" data-i18n="lobby.chapter">SUA PRÓXIMA AVENTURA COMEÇA AQUI</p>
+            <h1 id="home-title"><span data-i18n="lobby.title1">Role os dados.</span><br /><em data-i18n="lobby.title2">Decida o destino.</em></h1>
+          </div>
+          <nav class="home-menu" data-i18n-aria="home.menu">
+            <button type="button" class="home-tile is-main" data-screen="play"><span class="home-tile-icon" aria-hidden="true">⚄</span><strong data-i18n="home.play">Jogar</strong><small data-i18n="home.playHint">Criar mesa, entrar com código, procurar e suas mesas.</small></button>
+            <button type="button" class="home-tile" data-screen="sheets"><span class="home-tile-icon" aria-hidden="true">📜</span><strong data-i18n="home.sheets">Fichas</strong><small data-i18n="home.sheetsHint">Crie e edite seus personagens.</small></button>
+            <button type="button" class="home-tile" data-screen="look"><span class="home-tile-icon" aria-hidden="true">🎨</span><strong data-i18n="home.look">Personalização</strong><small data-i18n="home.lookHint">Tema, sua mesa e seus dados.</small></button>
+            <button type="button" class="home-tile" data-screen="config"><span class="home-tile-icon" aria-hidden="true">⚙</span><strong data-i18n="home.config">Configurações</strong><small data-i18n="home.configHint">Idioma, zoom, sons e animações.</small></button>
+          </nav>
+        </section>
+
+        <button id="screen-back" class="screen-back" type="button"><span aria-hidden="true">←</span> <span data-i18n="home.back">Início</span></button>
+
+        <section id="home-page" class="home-page" aria-labelledby="home-page-title">
+          <h2 id="home-page-title"></h2>
+          <div id="home-page-body" class="home-page-body"></div>
+          <div id="home-accounts" class="home-accounts" hidden>
+            <span class="field-label" data-i18n="home.accounts">CONTAS NESTE COMPUTADOR</span>
+            <ul id="home-accounts-list" class="room-results"></ul>
+            <p class="field-hint" data-i18n="home.accountsHint">Apagar uma conta remove as fichas e a foto dela. A pessoa pode criar a conta de novo.</p>
+          </div>
+        </section>
+
+        <!-- Jogar: criar, entrar com código, procurar ou reabrir suas mesas -->
         <section id="lobby" class="lobby" aria-labelledby="lobby-title">
           <div class="lobby-hero">
             <p class="chapter" data-i18n="lobby.chapter">SUA PRÓXIMA AVENTURA COMEÇA AQUI</p>
@@ -268,7 +294,7 @@
 
             <form id="panel-join" class="lobby-panel" role="tabpanel" aria-labelledby="tab-join" hidden>
               <label class="room-field" for="room-code"><span data-i18n="join.code">CÓDIGO DA SALA</span>
-                <input id="room-code" class="code-input" type="text" maxlength="6" autocomplete="off" spellcheck="false" data-i18n-placeholder="join.codePlaceholder" />
+                <input id="room-code" class="code-input" type="text" maxlength="300" autocomplete="off" spellcheck="false" data-i18n-placeholder="join.codePlaceholder" />
               </label>
               <span class="field-label" data-i18n="join.role">ENTRAR COMO</span>
               <div id="join-role" class="segmented" role="group">

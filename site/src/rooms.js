@@ -290,9 +290,43 @@ $('#join-role').addEventListener('click', (event) => {
   }
 });
 
+// O campo aceita só o código (6 letras e números) ou o link inteiro da mesa.
+const looksLikeLink = (value) => /[./:]/.test(value);
 codeInput.addEventListener('input', () => {
-  codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (!looksLikeLink(codeInput.value)) {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  }
 });
+
+// Link colado: se for deste mesmo servidor, entra pelo código; se for de um amigo
+// (link da Cloudflare), abre a mesa dele (no app, pelo próprio app).
+function joinByLink(text) {
+  let url;
+  try {
+    url = new URL(/^[a-z]+:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    return say(lobbyFeedback, 'join.badLink');
+  }
+  const code = (url.searchParams.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (url.host === location.host) {
+    if (code) {
+      codeInput.value = code;
+      return joinRoom(code, joinAsSpectator);
+    }
+    return say(lobbyFeedback, 'join.badLink');
+  }
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.trycloudflare.com')) {
+    return say(lobbyFeedback, 'join.badLink');
+  }
+  say(lobbyFeedback, 'join.opening');
+  const bridge = window.chrome?.webview;
+  if (bridge) {
+    bridge.postMessage({ action: 'join', link: url.toString() });
+  } else {
+    location.href = url.toString();
+  }
+  return undefined;
+}
 
 async function joinRoom(code, asSpectator, { silent = false } = {}) {
   try {
@@ -325,7 +359,12 @@ async function joinRoom(code, asSpectator, { silent = false } = {}) {
 
 $('#panel-join').addEventListener('submit', (event) => {
   event.preventDefault();
-  joinRoom(codeInput.value.trim().toUpperCase(), joinAsSpectator);
+  const value = codeInput.value.trim();
+  if (looksLikeLink(value)) {
+    joinByLink(value);
+    return;
+  }
+  joinRoom(value.toUpperCase(), joinAsSpectator);
 });
 
 function enteredRoom(result, asSpectator) {

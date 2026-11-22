@@ -69,14 +69,34 @@ export function initNotes(manager) {
     form.hidden = editing === null;
     list.replaceChildren();
     view.querySelector('#notes-empty').hidden = notes.length > 0;
-    for (const note of [...notes].sort((left, right) => right.updatedAt - left.updatedAt)) {
+    // Fixadas primeiro, na ordem em que foram fixadas; depois as mais recentes.
+    const sorted = [...notes].sort((left, right) => {
+      const leftPinned = left.pinnedAt || 0;
+      const rightPinned = right.pinnedAt || 0;
+      if (leftPinned && rightPinned) {
+        return leftPinned - rightPinned;
+      }
+      if (leftPinned || rightPinned) {
+        return leftPinned ? -1 : 1;
+      }
+      return right.updatedAt - left.updatedAt;
+    });
+    for (const note of sorted) {
       const item = document.createElement('li');
       const heading = document.createElement('h3');
       const body = document.createElement('p');
       const foot = document.createElement('div');
       const meta = document.createElement('small');
       item.className = 'note-card';
+      item.classList.toggle('is-pinned', Boolean(note.pinnedAt));
       heading.textContent = note.title;
+      if (note.pinnedAt) {
+        const pin = document.createElement('span');
+        pin.className = 'note-pin';
+        pin.textContent = '📌';
+        pin.title = t('notes.pinned');
+        heading.prepend(pin);
+      }
       body.className = 'note-text';
       body.textContent = note.text;
       foot.className = 'note-foot';
@@ -90,6 +110,20 @@ export function initNotes(manager) {
         edit.textContent = t('notes.edit');
         edit.addEventListener('click', () => openEditor(note));
         foot.append(edit);
+      }
+      if (room?.isMaster) {
+        const pin = document.createElement('button');
+        pin.type = 'button';
+        pin.className = 'text-button';
+        pin.textContent = t(note.pinnedAt ? 'notes.unpin' : 'notes.pin');
+        pin.addEventListener('click', async () => {
+          try {
+            await manager.invoke('PinNote', note.id, !note.pinnedAt);
+          } catch (error) {
+            feedback.textContent = errorText(error, 'notes.failed');
+          }
+        });
+        foot.append(pin);
       }
       if (account && (mine || room?.isMaster)) {
         const remove = document.createElement('button');

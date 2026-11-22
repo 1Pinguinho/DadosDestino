@@ -4,10 +4,10 @@ Mesa de rolagem de dados para RPG, para jogar com amigos pela internet. Um jogad
 
 ## Como jogar
 
-1. **Quem hospeda** abre o `DadosDestino.exe` e clica em **Hospedar mesa**. O computador dele vira o servidor da mesa.
+1. **Quem hospeda** abre o `DadosDestino.exe`. O app já liga a mesa no computador dele e abre a tela inicial, com **Jogar**, **Fichas**, **Personalização** e **Configurações**. Em **Jogar** ficam criar sala, entrar com código ou link, procurar salas e as suas mesas.
 2. Cria a sala: nome, quantos jogadores (2 a 12), **pública** (aparece na busca) ou **privada** (só com código ou convite), e se aceita **espectadores**.
 3. No topo aparece **Link da mesa**, discreto: o olho mostra ou esconde o link, e o botão ao lado copia o convite (já com o código da sala).
-4. **Os amigos** abrem o link no navegador, inclusive no celular, sem instalar nada, e entram como **jogador** ou **espectador**. Também podem procurar salas públicas em **Procurar salas**.
+4. **Os amigos** abrem o link no navegador, inclusive no celular, sem instalar nada, e entram como **jogador** ou **espectador**. Também podem procurar salas públicas em **Procurar salas**. Em **Entrar com código** vale só o código da sala ou o link inteiro da mesa de um amigo.
 5. A mesa fica no ar enquanto o app do anfitrião estiver aberto. Ao fechar, tudo é desligado.
 
 Cada jogador tem a própria mesa, duas por linha, e os dados rolam dentro da mesa de quem recebe a rolagem, ao mesmo tempo para todos. Espectadores veem tudo o que é público, não rolam dados e não ocupam vaga. O mestre (quem criou a sala) rola em qualquer mesa, faz rolagens privadas e pode mudar as configurações da sala depois.
@@ -18,7 +18,7 @@ A engrenagem no topo guarda as configurações de cada pessoa: **idioma** (Portu
 
 Ao lado do histórico fica o **chat** da sala, para jogadores e espectadores. A conversa fica guardada enquanto a sala existir, então quem sai e volta continua vendo tudo; ela some quando a sala fecha. No cabeçalho da mesa de cada outro jogador há um botão de **reação**: o emoji escolhido aparece sobre aquela mesa, flutua e some, para todos.
 
-**Conta e ficha:** em **Entrar**, no topo, cada um cria uma conta (fica no computador de quem hospeda; "Lembrar de mim" mantém o login por 90 dias) e põe uma **foto**, que aparece ao lado do nome na mesa. Na sala, a aba **Ficha** guarda as fichas do personagem no formato do sistema do grupo: HP, EA e San, os 5 atributos, as 27 perícias (o teste é calculado sozinho), resistências, habilidades básicas, efeitos, habilidades, inventário e **rolagens rápidas**. A ficha não rola dados: as rolagens rápidas aparecem no rolador. Lá também dá para escolher o **tipo da rolagem**: dano físico, mágico (pergunta quanto de EA gastar e desconta da ficha) ou de perfuração, e **recuperação** (poção de vida ou de mana, em você ou em outro jogador, nunca passando do máximo). As fichas podem ser exportadas e importadas para jogar na mesa de outro mestre.
+**Conta e ficha:** em **Entrar**, no topo, cada um cria uma conta (fica no computador de quem hospeda; "Lembrar de mim" mantém o login por 90 dias) e põe uma **foto**, que aparece ao lado do nome na mesa. A ficha também pode ser editada fora da mesa, em **Fichas** na tela inicial. Na sala, a aba **Ficha** guarda as fichas do personagem no formato do sistema do grupo: HP, EA e San, os 5 atributos, as 27 perícias (o teste é calculado sozinho), resistências, elementos, pontos de habilidade, iniciativa, efeitos, habilidades, inventário e **rolagens rápidas** (no topo da ficha). Campo vazio conta como 0, e o botão **Renomear** troca o nome de vida, EA, atributos, perícias e outros campos só na sua ficha. A ficha não rola dados: as rolagens rápidas aparecem no rolador. Lá também dá para escolher o **tipo da rolagem**: dano físico, mágico (pergunta quanto de EA gastar e desconta da ficha) ou de perfuração, e **recuperação** (poção de vida ou de mana, em você ou em outro jogador, nunca passando do máximo). As fichas podem ser exportadas e importadas para jogar na mesa de outro mestre.
 
 **Vantagem e desvantagem:** um clique ao lado do campo da rolagem troca o 1d20 por 2d20 e fica com o maior (ou o menor).
 
@@ -32,17 +32,15 @@ Ao lado do histórico fica o **chat** da sala, para jogadores e espectadores. A 
 
 **Status de dano:** os 12 status do sistema (Queimando, Chama Infernal, Sangrando, Hemorragia Interna, Envenenado, Corroído, Eletrocutado, Congelamento, Necrose, Sobrecarga Arcana, Deterioração Abissal e Ruptura Espacial) aparecem como ícones na mesa e na faixa de combate. Quem acerta pode aplicar 1 stack no alvo; o mestre aplica e remove quando quiser. O dano é rolado pelo app no fim do turno de quem está afetado, com base, acréscimo por stack, máximo, duração e as regras de cada um (status ignoram qualquer resistência; Eletrocutado estoura +2d8 ao chegar a 4 stacks). Ao encerrar o combate, aparece um **resumo** (dano causado e recebido, acertos, 20 e 1 naturais, quedas e socorros), que também fica no chat.
 
-**Notas e mesas salvas:** a aba **Notas** tem cartões que todos da sala veem; quem escreveu edita e apaga, e o mestre apaga qualquer um. Se o mestre criar a sala com conta, a mesa e as notas ficam salvas, e ele reabre com o mesmo código em **Minhas mesas**. Na tela inicial do app, quem hospeda vê as contas guardadas no computador e pode apagar uma.
+**Notas e mesas salvas:** a aba **Notas** tem cartões que todos da sala veem; quem escreveu edita e apaga, e o mestre apaga qualquer um e pode **fixar** notas no topo (na ordem em que foram fixadas). Se o mestre criar a sala com conta, a mesa e as notas ficam salvas, e ele reabre com o mesmo código em **Minhas mesas**. Em **Configurações**, no app, quem hospeda vê as contas guardadas no computador e pode apagar uma.
 
 Cada jogador pode criar os próprios **atalhos** de rolagem (como "Espada longa = 1d20+7"). O mestre pode **remover** alguém da sala, com a opção de **bloquear** a volta. Quem fecha o navegador sem querer e abre o mesmo link volta para a mesma vaga.
 
 O link é gerado pela Cloudflare (quick tunnel): é gratuito, não precisa de conta, não precisa abrir portas no roteador e muda a cada vez que a mesa é hospedada. O conector da Cloudflare (`cloudflared.exe`, do GitHub oficial `cloudflare/cloudflared`, licença Apache 2.0) já vem no pacote, em `dados/conector`, então qualquer pessoa que baixar o app pode hospedar na hora. Se ele faltar, o app baixa sozinho na primeira vez que hospedar. O servidor só aceita conexões do próprio computador, então o Windows não pede liberação no firewall.
 
-Para abrir já hospedando, sem passar pela tela inicial, crie um atalho para o `.exe` com `--hospedar` no fim do destino.
-
 ## O app em pastas
 
-O app não é mais um arquivo só: o `.exe` (que já traz o .NET) fica ao lado das pastas `site/` (a mesa), `launcher/` (a tela inicial) e `docs/`. Ao abrir, ele cria `config/` (com `config.json` para porta e limites das salas, e `preferencias.json` com as suas configurações) e `dados/` (dados do navegador do app e o conector da Cloudflare). O que tem em cada pasta, e como mudar textos, cores e limites, está em [docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md).
+O app não é mais um arquivo só: o `.exe` (que já traz o .NET) fica ao lado das pastas `site/` (a mesa), `launcher/` (tela de reserva, se a mesa não ligar) e `docs/`. Ao abrir, ele cria `config/` (com `config.json` para porta e limites das salas, e `preferencias.json` com as suas configurações) e `dados/` (dados do navegador do app e o conector da Cloudflare). O que tem em cada pasta, e como mudar textos, cores e limites, está em [docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md).
 
 ## Gerar o app
 
@@ -63,7 +61,7 @@ O resultado vai para `publish\DadosDestino\`, junto de um `publish\DadosDestino-
 | `Tunnel/` | `TunnelManager.cs` (link da Cloudflare), `Authenticode.cs` (confere a assinatura do conector) |
 | `Config/` | `AppPaths.cs` (onde fica cada pasta), `AppConfig.cs` (config.json e preferencias.json) |
 | `site/` | a mesa: `index.html`, `src/` (JavaScript, CSS, temas e textos em `locales/`) e `vendor/` |
-| `launcher/` | a tela inicial do app |
+| `launcher/` | tela de reserva do app (aparece só se a mesa não ligar) |
 | `docs/` | como o app funciona |
 
 ## Desenvolvimento

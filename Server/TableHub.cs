@@ -331,6 +331,24 @@ public sealed partial class TableHub : Hub
         room.Notes.Remove(note);
     });
 
+    // Só o mestre fixa e desafixa. As fixadas ficam no topo, na ordem de fixação.
+    public Task PinNote(string noteId, bool pinned) => ChangeNotes(new NoteRequest(noteId, "-", "-"), (room, actor, _, _, _) =>
+    {
+        if (!actor.IsMaster)
+        {
+            throw new HubException("MASTER_ONLY");
+        }
+        var note = room.Notes.FirstOrDefault(candidate => candidate.Id == noteId) ?? throw new HubException("NOTE_NOT_FOUND");
+        if (pinned && note.PinnedAt == 0)
+        {
+            note.PinnedAt = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), room.Notes.Max(candidate => candidate.PinnedAt) + 1);
+        }
+        else if (!pinned)
+        {
+            note.PinnedAt = 0;
+        }
+    });
+
     private async Task ChangeNotes(NoteRequest request, Action<RoomState, PlayerState, string, string, string> change)
     {
         if (request is null)

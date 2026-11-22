@@ -2,7 +2,7 @@ DADOS & DESTINO
 Mesa de rolagem de dados para RPG, para jogar com amigos pela internet.
 
 COMO JOGAR
-1. Abra o DadosDestino.exe e clique em "Hospedar mesa".
+1. Abra o DadosDestino.exe. Ele abre na tela inicial: clique em "Jogar".
 2. Crie a sala (nome, número de jogadores, pública ou privada).
 3. No topo, use o botão de copiar ao lado de "Link da mesa" e mande o link para os amigos.
    O olho mostra ou esconde o link.

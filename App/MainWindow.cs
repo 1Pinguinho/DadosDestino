@@ -6,8 +6,8 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace RolagemRpg;
 
-// Janela do app. Começa na tela inicial (hospedar ou entrar numa mesa) e depois
-// mostra a mesa: a deste computador, ou a de um amigo pelo link que ele mandou.
+// Janela do app. Liga a mesa deste computador e abre direto na tela inicial dela
+// (Jogar, Fichas, Personalização, Configurações). Também abre a mesa de um amigo pelo link.
 // Idioma e tema escolhidos em qualquer tela ficam salvos em config/preferencias.json.
 public sealed class MainWindow : Form
 {
@@ -33,15 +33,13 @@ public sealed class MainWindow : Form
     private readonly HostSession host;
     private readonly Preferences preferences;
     private readonly WebView2 webView = new() { Dock = DockStyle.Fill };
-    private readonly bool hostOnStart;
     private bool showingLauncher;
     private string titleState = "launcher";
 
-    public MainWindow(HostSession host, Preferences preferences, bool hostOnStart = false)
+    public MainWindow(HostSession host, Preferences preferences)
     {
         this.host = host;
         this.preferences = preferences;
-        this.hostOnStart = hostOnStart;
         Text = AppTitle;
         ApplyBackground();
         StartPosition = FormStartPosition.CenterScreen;
@@ -283,11 +281,9 @@ public sealed class MainWindow : Form
                     SendSettings();
                 }
             };
-            ShowLauncher(null);
-            if (hostOnStart)
-            {
-                await StartHostingAsync();
-            }
+            // O app abre direto na tela inicial da mesa deste computador (Jogar, Fichas,
+            // Personalização, Configurações). A tela antiga só aparece se algo falhar.
+            await StartHostingAsync();
         }
         catch (WebView2RuntimeNotFoundException)
         {
@@ -439,15 +435,29 @@ public sealed class MainWindow : Form
                 SendSettings();
                 SendWindowState();
                 return;
-            // O botão "Início" da mesa volta para a tela inicial.
+            // O botão "Início" volta para a tela inicial da mesa deste computador.
             case "home":
-                ShowLauncher(host.IsHosting ? "HOSTING_STILL_ON" : null);
+                if (host.LocalUri is { } local)
+                {
+                    showingLauncher = false;
+                    titleState = "hosting";
+                    UpdateTitle();
+                    webView.CoreWebView2.Navigate(local.ToString());
+                }
+                else
+                {
+                    ShowLauncher(null);
+                }
                 return;
         }
 
-        // Hospedar e entrar só valem quando pedidos pela própria tela inicial,
-        // nunca por uma página de fora.
-        if (!showingLauncher || args.Source != "about:blank")
+        // Hospedar, entrar e mexer nas contas só valem quando pedidos pela tela de
+        // reserva ou pela mesa deste computador, nunca por uma página de fora.
+        var fromLauncher = showingLauncher && args.Source == "about:blank";
+        var fromLocalTable = !showingLauncher && host.LocalUri is { } localUri
+            && Uri.TryCreate(args.Source, UriKind.Absolute, out var source)
+            && source.GetLeftPart(UriPartial.Authority).Equals(localUri.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase);
+        if (!fromLauncher && !fromLocalTable)
         {
             return;
         }
