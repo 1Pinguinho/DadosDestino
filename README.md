@@ -18,6 +18,10 @@ A engrenagem no topo guarda as configurações de cada pessoa: **idioma** (Portu
 
 Ao lado do histórico fica o **chat** da sala, para jogadores e espectadores. A conversa fica guardada enquanto a sala existir, então quem sai e volta continua vendo tudo; ela some quando a sala fecha. No cabeçalho da mesa de cada outro jogador há um botão de **reação**: o emoji escolhido aparece sobre aquela mesa, flutua e some, para todos.
 
+**Conta e ficha:** em **Entrar**, no topo, cada um cria uma conta (fica no computador de quem hospeda; "Lembrar de mim" mantém o login por 90 dias) e põe uma **foto**, que aparece ao lado do nome na mesa. Na sala, a aba **Ficha** guarda as fichas do personagem no formato do sistema do grupo: HP, EA e San, os 5 atributos, as 27 perícias (o teste é calculado sozinho), resistências, habilidades básicas, efeitos, habilidades, inventário e **rolagens rápidas**. A ficha não rola dados: as rolagens rápidas aparecem no rolador. Lá também dá para escolher o **tipo da rolagem**: dano físico, mágico (pergunta quanto de EA gastar e desconta da ficha) ou de perfuração, e **recuperação** (poção de vida ou de mana, em você ou em outro jogador, nunca passando do máximo). As fichas podem ser exportadas e importadas para jogar na mesa de outro mestre.
+
+**Notas e mesas salvas:** a aba **Notas** tem cartões que todos da sala veem; quem escreveu edita e apaga, e o mestre apaga qualquer um. Se o mestre criar a sala com conta, a mesa e as notas ficam salvas, e ele reabre com o mesmo código em **Minhas mesas**. Na tela inicial do app, quem hospeda vê as contas guardadas no computador e pode apagar uma.
+
 Cada jogador pode criar os próprios **atalhos** de rolagem (como "Espada longa = 1d20+7"). O mestre pode **remover** alguém da sala, com a opção de **bloquear** a volta. Quem fecha o navegador sem querer e abre o mesmo link volta para a mesma vaga.
 
 O link é gerado pela Cloudflare (quick tunnel): é gratuito, não precisa de conta, não precisa abrir portas no roteador e muda a cada vez que a mesa é hospedada. O conector da Cloudflare (`cloudflared.exe`, do GitHub oficial `cloudflare/cloudflared`, licença Apache 2.0) já vem no pacote, em `dados/conector`, então qualquer pessoa que baixar o app pode hospedar na hora. Se ele faltar, o app baixa sozinho na primeira vez que hospedar. O servidor só aceita conexões do próprio computador, então o Windows não pede liberação no firewall.
@@ -68,7 +72,7 @@ Os dados caem girando dentro da mesa do jogador, cada tipo com seu formato e cor
 
 ## Segurança
 
-- **Sem cookies e sem contas.** O nome, o personagem e o histórico ficam só no navegador de cada um.
+- **Contas com senha protegida.** As contas ficam no computador de quem hospeda (`dados/contas/`). A senha é guardada só como hash PBKDF2-SHA256 (210 mil iterações, com salt) e o token de sessão só como hash SHA-256; depois de 10 senhas erradas em 10 minutos, o login fica bloqueado. A sessão vai no cabeçalho `Authorization`, sem cookies. Sem conta, nome, personagem e histórico ficam só no navegador de cada um.
 - **Nada de terceiros:** scripts, estilos e fontes são servidos pelo próprio app, então nenhum outro site recebe o IP de quem joga. Uma política de segurança de conteúdo (CSP) impede a página de carregar qualquer coisa de fora ou de ser embutida em outro site.
 - **Proteção contra sites maliciosos:** o servidor recusa pedidos de outras origens (CSRF e sequestro de WebSocket) e, no modo anfitrião, endereços que fingem ser o localhost (DNS rebinding). O controle do link da internet só responde ao próprio computador do anfitrião.
 - **Limites contra abuso:** cada pessoa (IP) tem limite de ações por segundo e de conexões, e quem erra o código da sala 10 vezes fica bloqueado por alguns minutos. Mensagens grandes e salas demais são recusadas. Salas privadas não aparecem na busca.

@@ -15,6 +15,10 @@ Tudo fica salvo em config/preferencias.json. "Restaurar padrões" volta ao iníc
 Na aba "Chat", ao lado do histórico, a mesa conversa. O botão de carinha na mesa de
 outro jogador manda uma reação que aparece, flutua e some.
 
+Em "Entrar", no topo, cada um cria a sua conta (fica neste computador, com senha).
+Com ela: foto na mesa, fichas (aba "Ficha"), notas da mesa (aba "Notas") e, para o
+mestre, mesas salvas que reabrem com o mesmo código em "Minhas mesas".
+
 Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como
 mudar textos, cores e limites das salas, leia docs\COMO-FUNCIONA.md.
 
@@ -36,5 +40,9 @@ Everything is saved in config/preferencias.json. "Restore defaults" resets it.
 
 The "Chat" tab, next to the history, lets the table talk. The smiley button on another
 player's table sends a reaction that pops up, floats and fades.
+
+"Sign in" at the top creates your account (stored on the host's computer, with a password).
+With it: your photo on the table, character sheets ("Sheet" tab), table notes ("Notes"
+tab) and, for the GM, saved tables that reopen with the same code in "My tables".
 
 Keep all folders together with the .exe. See docs\COMO-FUNCIONA.md for details.

@@ -57,6 +57,15 @@
       .titlebar-buttons .icon-restore, .app-titlebar.is-maximized .icon-max { display: none; }
       .app-titlebar.is-maximized .icon-restore { display: inline; }
       body { padding-top: 66px; }
+      .accounts { margin-top: 14px; color: var(--muted); font-size: 12px; }
+      .accounts summary { cursor: pointer; font: 10px var(--mono); letter-spacing: .8px; }
+      .accounts summary:hover { color: var(--ink); }
+      .accounts ul { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+      .accounts li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 6px 6px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); }
+      .accounts li button { min-height: 28px; padding: 0 10px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: 10px var(--mono); }
+      .accounts li button:hover:not(:disabled) { border-color: var(--warm); background: transparent; color: var(--warm); transform: none; }
+      .accounts li button.is-armed { border-color: var(--warm); color: var(--warm); }
+      .accounts p { margin: 8px 0 0; color: var(--faint); font-size: 11px; }
     </style>
   </head>
   <body>
@@ -100,6 +109,11 @@
 
       <p id="status" class="status" role="status" aria-live="polite" data-message="{{MESSAGE}}" data-detail="{{DETAIL}}" data-look="{{LOOK}}"></p>
       <p class="hint" data-t="hint"></p>
+      <details id="accounts" class="accounts" hidden>
+        <summary><span data-t="accountsTitle"></span> (<span id="accounts-count">0</span>)</summary>
+        <ul id="accounts-list"></ul>
+        <p data-t="accountsHint"></p>
+      </details>
     </main>
 
     <script>
@@ -121,6 +135,8 @@
           BAD_LINK: 'Esse link não parece certo. Cole o link inteiro que o anfitrião mandou.',
           HOST_FAILED: 'Não foi possível hospedar a mesa: ',
           OPEN_FAILED: 'Não foi possível abrir a mesa. Confira o link e se o anfitrião está com o app aberto.',
+          accountsTitle: 'CONTAS NESTE COMPUTADOR', accountsHint: 'Apagar uma conta remove as fichas e a foto dela. A pessoa pode criar a conta de novo.',
+          deleteAccount: 'Apagar', confirmDelete: 'Confirmar',
         },
         en: {
           title1: 'Roll the dice.', title2: 'Gather the table.',
@@ -136,6 +152,8 @@
           BAD_LINK: 'That link doesn’t look right. Paste the whole link the host sent.',
           HOST_FAILED: 'Could not host the table: ',
           OPEN_FAILED: 'Could not open the table. Check the link and whether the host has the app open.',
+          accountsTitle: 'ACCOUNTS ON THIS COMPUTER', accountsHint: 'Deleting an account removes its sheets and photo. The person can create it again.',
+          deleteAccount: 'Delete', confirmDelete: 'Confirm',
         },
       };
       const webview = (window.chrome && window.chrome.webview) || { postMessage() {}, addEventListener() {} };
@@ -160,6 +178,7 @@
         document.querySelectorAll('[data-lang]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.lang === language)));
         linkInput.setAttribute('aria-label', tr('linkLabel'));
         renderStatus();
+        if (typeof renderAccounts === 'function') renderAccounts();
       }
 
       function setBusy(busy, message) {
@@ -204,7 +223,41 @@
         if (event.data && event.data.error) {
           setBusy(false, { code: event.data.error, detail: event.data.detail || '' });
         }
+        if (event.data && Array.isArray(event.data.accounts)) {
+          accounts = event.data.accounts;
+          renderAccounts();
+        }
       });
+
+      // Contas dos jogadores guardadas neste computador (só dá para apagar; senhas nunca aparecem).
+      let accounts = [];
+      let armedAccount = '';
+      function renderAccounts() {
+        const list = document.querySelector('#accounts-list');
+        document.querySelector('#accounts').hidden = accounts.length === 0;
+        document.querySelector('#accounts-count').textContent = String(accounts.length);
+        list.replaceChildren(...accounts.map((account) => {
+          const item = document.createElement('li');
+          const name = document.createElement('span');
+          const remove = document.createElement('button');
+          name.textContent = account.username;
+          remove.type = 'button';
+          remove.textContent = tr(armedAccount === account.id ? 'confirmDelete' : 'deleteAccount');
+          remove.classList.toggle('is-armed', armedAccount === account.id);
+          remove.addEventListener('click', () => {
+            if (armedAccount !== account.id) {
+              armedAccount = account.id;
+              renderAccounts();
+              return;
+            }
+            armedAccount = '';
+            webview.postMessage({ action: 'deleteAccount', id: account.id });
+          });
+          item.append(name, remove);
+          return item;
+        }));
+      }
+      webview.postMessage({ action: 'accounts' });
 
       // Tema personalizado e zoom escolhidos na mesa.
       try {

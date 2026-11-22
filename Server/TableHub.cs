@@ -12,6 +12,9 @@ public sealed class TableHub : Hub
     private const int MaxRollDice = 10;
     private const int MaxChatLength = 500;
     private const int MaxChatHistory = 200;
+    private const int MaxNotes = 100;
+    private const int MaxNoteTitle = 60;
+    private const int MaxNoteText = 2000;
     private static readonly TimeSpan ReactionCooldown = TimeSpan.FromSeconds(1);
 
     // Reações que dá para mandar na mesa de outro jogador (o site tem a mesma lista).
@@ -41,9 +44,17 @@ public sealed class TableHub : Hub
 
     private readonly ServerConfig config;
 
-    public TableHub(ServerConfig config)
+    private static int maxSpectatorsSetting;
+    private readonly IHubContext<TableHub> hubContext;
+
+    // Tipos de rolagem que o site pode mandar (ver SharedRoll.Kind).
+    private static readonly string[] RollKinds = { "normal", "recovery", "damage", "attack", "reflex", "initiative", "medicine" };
+
+    public TableHub(ServerConfig config, IHubContext<TableHub> hubContext)
     {
         this.config = config;
+        this.hubContext = hubContext;
+        maxSpectatorsSetting = config.MaxSpectatorsPerRoom;
     }
 
     public ServerLimits GetLimits() => new(config.MaxPlayersPerRoom, config.MaxSpectatorsPerRoom);
@@ -73,15 +84,18 @@ public sealed class TableHub : Hub
             {
                 code = GenerateRoomCode();
             }
-            while (Rooms.ContainsKey(code));
+            while (Rooms.ContainsKey(code) || RoomStore.Exists(code));
 
-            Rooms.Add(code, new RoomState
+            var room = new RoomState
             {
                 Name = roomName,
                 MaxPlayers = maxPlayers,
                 IsPublic = request.IsPublic,
                 AllowSpectators = request.AllowSpectators && config.MaxSpectatorsPerRoom > 0,
-            });
+                OwnerAccountId = CurrentAccountId(),
+            };
+            Rooms.Add(code, room);
+            Persist(code, room);
         }
 
         return await JoinRoomCore(code, playerName, characterName, asSpectator: false, request.ReconnectToken, request.Color);
@@ -155,8 +169,240 @@ public sealed class TableHub : Hub
             room.AllowSpectators = request.AllowSpectators && config.MaxSpectatorsPerRoom > 0;
             room.LastActivityUtc = DateTime.UtcNow;
             roster = CreateRoster(code, room);
+            Persist(code, room);
         }
         await Clients.Group(code).SendAsync("RoomUpdated", roster);
+    }
+
+    // ---------- contas ----------
+
+    // O site manda o token da sessão logo ao conectar (e ao entrar ou sair da conta).
+    // Se já estiver numa sala, a vaga passa a ser dessa conta (foto e ficha na mesa).
+    public async Task<AccountInfo?> Authenticate(string? token)
+    {
+        var account = AccountStore.Instance.Resolve(token);
+        if (account is null)
+        {
+            Context.Items.Remove("accountId");
+        }
+        else
+        {
+            Context.Items["accountId"] = account.Id;
+        }
+
+        if (Context.Items.TryGetValue("roomCode", out var roomValue) && roomValue is string code
+            && Context.Items.TryGetValue("playerId", out var playerValue) && playerValue is string playerId)
+        {
+            RoomRoster? roster = null;
+            lock (RoomsLock)
+            {
+                if (Rooms.TryGetValue(code, out var room) && room.Players.TryGetValue(playerId, out var player)
+                    && player.AccountId != account?.Id
+                    && (account is null || !room.Players.Values.Any(other => other.AccountId == account.Id)))
+                {
+                    player.AccountId = account?.Id;
+                    roster = CreateRoster(code, room);
+                }
+            }
+            if (roster is not null)
+            {
+                await Clients.Group(code).SendAsync("RoomUpdated", roster);
+            }
+        }
+        return account;
+    }
+
+    // Mesas salvas do mestre logado.
+    public IReadOnlyList<MyRoom> ListMyRooms()
+    {
+        var accountId = CurrentAccountId() ?? throw new HubException("NOT_LOGGED_IN");
+        var saved = RoomStore.ByOwner(accountId);
+        lock (RoomsLock)
+        {
+            return saved.Select(room => Rooms.TryGetValue(room.Code, out var open)
+                    ? new MyRoom(room.Code, open.Name, true, open.Players.Values.Count(player => !player.IsSpectator && player.ConnectionId is not null), open.Notes.Count)
+                    : new MyRoom(room.Code, room.Name, false, 0, room.Notes.Count))
+                .ToArray();
+        }
+    }
+
+    // O dono reabre a mesa salva com o mesmo código (e volta como mestre).
+    public async Task<JoinResponse> ReopenRoom(ReopenRoomRequest request)
+    {
+        if (request is null)
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
+        var accountId = CurrentAccountId() ?? throw new HubException("NOT_LOGGED_IN");
+        var code = ValidateRoomCode(request.Code);
+        var playerName = ValidatePlayerName(request.PlayerName);
+        var characterName = ValidateCharacterName(request.CharacterName);
+        var saved = RoomStore.Load(code);
+        if (saved is null || saved.OwnerAccountId != accountId)
+        {
+            throw new HubException("ROOM_NOT_FOUND");
+        }
+        await LeaveCurrentRoom();
+        lock (RoomsLock)
+        {
+            if (!Rooms.ContainsKey(code))
+            {
+                RemoveExpiredRooms();
+                if (Rooms.Count >= config.MaxRooms)
+                {
+                    throw new HubException("SERVER_FULL");
+                }
+                Rooms.Add(code, new RoomState
+                {
+                    Name = saved.Name,
+                    MaxPlayers = Math.Clamp(saved.MaxPlayers, 2, config.MaxPlayersPerRoom),
+                    IsPublic = saved.IsPublic,
+                    AllowSpectators = saved.AllowSpectators && config.MaxSpectatorsPerRoom > 0,
+                    OwnerAccountId = accountId,
+                    Notes = saved.Notes ?? new(),
+                });
+            }
+        }
+        return await JoinRoomCore(code, playerName, characterName, asSpectator: false, reconnectToken: null, request.Color);
+    }
+
+    // O dono apaga a mesa salva de vez (notas incluídas). Se estiver aberta, continua
+    // até todos saírem, mas não é mais salva.
+    public void DeleteMyRoom(string code)
+    {
+        var accountId = CurrentAccountId() ?? throw new HubException("NOT_LOGGED_IN");
+        code = ValidateRoomCode(code);
+        var saved = RoomStore.Load(code);
+        if (saved is null || saved.OwnerAccountId != accountId)
+        {
+            throw new HubException("ROOM_NOT_FOUND");
+        }
+        lock (RoomsLock)
+        {
+            if (Rooms.TryGetValue(code, out var room))
+            {
+                room.OwnerAccountId = null;
+            }
+            RoomStore.Delete(code);
+        }
+    }
+
+    // ---------- notas da mesa ----------
+
+    public Task AddNote(NoteRequest request) => ChangeNotes(request, (room, actor, accountId, title, text) =>
+    {
+        if (room.Notes.Count >= MaxNotes)
+        {
+            throw new HubException("TOO_MANY_NOTES");
+        }
+        room.Notes.Add(new RoomNote
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            AuthorAccountId = accountId,
+            AuthorName = actor.Name,
+            Title = title,
+            Text = text,
+            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        });
+    });
+
+    public Task EditNote(NoteRequest request) => ChangeNotes(request, (room, actor, accountId, title, text) =>
+    {
+        var note = room.Notes.FirstOrDefault(candidate => candidate.Id == request.Id) ?? throw new HubException("NOTE_NOT_FOUND");
+        if (note.AuthorAccountId != accountId)
+        {
+            throw new HubException("NOT_YOUR_NOTE");
+        }
+        note.Title = title;
+        note.Text = text;
+        note.AuthorName = actor.Name;
+        note.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    });
+
+    public Task DeleteNote(string noteId) => ChangeNotes(new NoteRequest(noteId, "-", "-"), (room, actor, accountId, _, _) =>
+    {
+        var note = room.Notes.FirstOrDefault(candidate => candidate.Id == noteId) ?? throw new HubException("NOTE_NOT_FOUND");
+        if (note.AuthorAccountId != accountId && !actor.IsMaster)
+        {
+            throw new HubException("NOT_YOUR_NOTE");
+        }
+        room.Notes.Remove(note);
+    });
+
+    private async Task ChangeNotes(NoteRequest request, Action<RoomState, PlayerState, string, string, string> change)
+    {
+        if (request is null)
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
+        var title = Sheet.Clean(request.Title, MaxNoteTitle);
+        var text = (request.Text ?? string.Empty).Trim();
+        if (title.Length == 0 || text.Length == 0 || text.Length > MaxNoteText)
+        {
+            throw new HubException("INVALID_NOTE");
+        }
+        var accountId = CurrentAccountId() ?? throw new HubException("NOT_LOGGED_IN");
+        var (code, playerId) = CurrentSeat();
+        RoomNote[] notes;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(playerId, out var actor)
+                || actor.ConnectionId != Context.ConnectionId)
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            change(room, actor, accountId, title, text);
+            room.LastActivityUtc = DateTime.UtcNow;
+            Persist(code, room);
+            notes = room.Notes.ToArray();
+        }
+        await Clients.Group(code).SendAsync("NotesUpdated", notes);
+    }
+
+    // Grava a sala em disco quando ela tem dono (mestre com conta).
+    private static void Persist(string code, RoomState room)
+    {
+        if (room.OwnerAccountId is null)
+        {
+            return;
+        }
+        RoomStore.Save(new SavedRoom
+        {
+            Code = code,
+            Name = room.Name,
+            MaxPlayers = room.MaxPlayers,
+            IsPublic = room.IsPublic,
+            AllowSpectators = room.AllowSpectators,
+            OwnerAccountId = room.OwnerAccountId,
+            Notes = room.Notes.ToList(),
+        });
+    }
+
+    private string? CurrentAccountId() =>
+        Context.Items.TryGetValue("accountId", out var value) && value is string accountId
+        && AccountStore.Instance.Find(accountId) is not null
+            ? accountId
+            : null;
+
+    // A ficha de uma conta mudou (pelo site ou por uma rolagem): as mesas onde ela
+    // está recebem as barrinhas novas.
+    public static async Task NotifyAccountChanged(IHubContext<TableHub> hub, string accountId)
+    {
+        var updates = new List<(string Code, RoomRoster Roster)>();
+        lock (RoomsLock)
+        {
+            foreach (var (code, room) in Rooms)
+            {
+                if (room.Players.Values.Any(player => player.AccountId == accountId))
+                {
+                    updates.Add((code, CreateRosterFor(code, room)));
+                }
+            }
+        }
+        foreach (var (code, roster) in updates)
+        {
+            await hub.Clients.Group(code).SendAsync("RoomUpdated", roster);
+        }
     }
 
     public Task LeaveRoom() => LeaveCurrentRoom();
@@ -242,9 +488,21 @@ public sealed class TableHub : Hub
             throw new HubException("INVALID_ROLL");
         }
 
+        var kind = roll.Kind ?? "normal";
+        if (!RollKinds.Contains(kind) || roll.ManaCost is < 0 or > Sheet.MaxStatus
+            || (roll.EffectTargetId is not null && roll.EffectTargetId.Length > 64))
+        {
+            throw new HubException("INVALID_ROLL");
+        }
         var (code, playerId) = CurrentSeat();
         SharedRoll sharedRoll;
         string[] privateRecipients = Array.Empty<string>();
+        var changedAccounts = new List<string>();
+        string? effectTargetId = null;
+        string? recoverStat = null;
+        string? damageType = null;
+        var manaCost = 0;
+        int? applied = null;
         lock (RoomsLock)
         {
             if (!Rooms.TryGetValue(code, out var room)
@@ -270,6 +528,52 @@ public sealed class TableHub : Hub
                 throw new HubException("PRIVATE_MASTER_ONLY");
             }
 
+            if (kind == "recovery")
+            {
+                // Poção: soma na vida ou na mana atual de quem bebe (você ou outro jogador),
+                // sem passar do máximo. Caído (vida 0 ou menos) não passa de 0.
+                recoverStat = roll.RecoverStat is "hp" or "ea" ? roll.RecoverStat : throw new HubException("INVALID_ROLL");
+                var drinker = roll.EffectTargetId is null ? actor
+                    : room.Players.TryGetValue(roll.EffectTargetId, out var found) && !found.IsSpectator ? found
+                    : throw new HubException("TARGET_UNAVAILABLE");
+                if (drinker.AccountId is null || AccountStore.Instance.Status(drinker.AccountId) is null)
+                {
+                    throw new HubException("NO_SHEET");
+                }
+                var amount = (int)Math.Max(0, Math.Min(Sheet.MaxStatus, Math.Floor(roll.Total)));
+                int before = 0, after = 0;
+                AccountStore.Instance.ChangeStatus(drinker.AccountId, null, recoverStat, (current, max) =>
+                {
+                    before = current;
+                    var ceiling = recoverStat == "hp" && current <= 0 ? 0 : max;
+                    after = Math.Max(current, Math.Min(ceiling, current + amount));
+                    return after;
+                });
+                applied = after - before;
+                effectTargetId = drinker.Id;
+                changedAccounts.Add(drinker.AccountId);
+            }
+            else if (kind == "damage")
+            {
+                damageType = roll.DamageType is "physical" or "magic" or "pierce" ? roll.DamageType : throw new HubException("INVALID_ROLL");
+                if (damageType == "magic" && roll.ManaCost > 0)
+                {
+                    // Magia: a EA escolhida sai da ficha de quem conjura.
+                    var status = actor.AccountId is null ? null : AccountStore.Instance.Status(actor.AccountId);
+                    if (status is null)
+                    {
+                        throw new HubException("NO_SHEET");
+                    }
+                    if (roll.ManaCost > status.Ea)
+                    {
+                        throw new HubException("NOT_ENOUGH_MANA");
+                    }
+                    AccountStore.Instance.ChangeStatus(actor.AccountId!, null, "ea", (current, _) => current - roll.ManaCost);
+                    manaCost = roll.ManaCost;
+                    changedAccounts.Add(actor.AccountId!);
+                }
+            }
+
             sharedRoll = new SharedRoll(
                 roll.Id,
                 actor.Id,
@@ -284,7 +588,13 @@ public sealed class TableHub : Hub
                 roll.Dice?.ToArray() ?? Array.Empty<RollDie>(),
                 roll.ExtraDice,
                 ValidDiceColor(roll.DiceColor),
-                roll.DiceStyle is not null && DiceStyles.Contains(roll.DiceStyle) ? roll.DiceStyle : "classic");
+                roll.DiceStyle is not null && DiceStyles.Contains(roll.DiceStyle) ? roll.DiceStyle : "classic",
+                kind,
+                effectTargetId,
+                recoverStat,
+                damageType,
+                manaCost,
+                applied);
 
             room.Rolls.Add(sharedRoll);
             if (room.Rolls.Count > MaxRollHistory)
@@ -308,6 +618,10 @@ public sealed class TableHub : Hub
         else
         {
             await Clients.Group(code).SendAsync("ReceiveRoll", sharedRoll);
+        }
+        foreach (var accountId in changedAccounts.Distinct())
+        {
+            await NotifyAccountChanged(hubContext, accountId);
         }
     }
 
@@ -407,13 +721,21 @@ public sealed class TableHub : Hub
         {
             if (!Rooms.TryGetValue(code, out var room))
             {
-                throw new HubException("ROOM_NOT_FOUND");
+                // Mesa salva que o mestre ainda não reabriu.
+                throw new HubException(RoomStore.Exists(code) ? "ROOM_CLOSED" : "ROOM_NOT_FOUND");
             }
 
             PruneDisconnectedPlayers(room);
+            var accountId = CurrentAccountId();
             var player = !string.IsNullOrWhiteSpace(reconnectToken)
                 ? room.Players.Values.FirstOrDefault(candidate => TokensMatch(candidate.ReconnectToken, reconnectToken))
                 : null;
+            // Com conta, volta para a própria vaga mesmo de outro navegador.
+            player ??= accountId is null ? null : room.Players.Values.FirstOrDefault(candidate => candidate.AccountId == accountId);
+            if (player is not null && player.AccountId is not null && accountId is not null && player.AccountId != accountId)
+            {
+                player = null;
+            }
             // Quem volta com o token mantém o papel; mudar de papel exige sair e entrar de novo.
             if (player is not null && player.IsSpectator != asSpectator)
             {
@@ -486,6 +808,20 @@ public sealed class TableHub : Hub
             if (!string.IsNullOrEmpty(replacedConnectionId))
             {
                 room.ConnectionPlayers.Remove(replacedConnectionId);
+            }
+            if (accountId is not null)
+            {
+                player.AccountId = accountId;
+            }
+            // O dono da mesa salva sempre volta como mestre.
+            if (!player.IsSpectator && room.OwnerAccountId is not null && player.AccountId == room.OwnerAccountId && !player.IsMaster)
+            {
+                foreach (var other in room.Players.Values)
+                {
+                    other.IsMaster = false;
+                }
+                player.IsMaster = true;
+                room.MasterPlayerId = player.Id;
             }
             player.ConnectionId = Context.ConnectionId;
             player.LastSeenUtc = DateTime.UtcNow;
@@ -629,15 +965,8 @@ public sealed class TableHub : Hub
     {
         var visibleRolls = room.Rolls.Where(roll => !roll.IsPrivate
             || viewer.IsMaster || roll.TargetPlayerId == viewer.Id).ToArray();
-        var players = room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc).Select(player =>
-            new RoomPlayer(
-                player.Id,
-                player.Name,
-                player.CharacterName,
-                player.IsMaster,
-                player.ConnectionId is not null,
-                player.Color,
-                visibleRolls.LastOrDefault(roll => roll.TargetPlayerId == player.Id))).ToArray();
+        var players = room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc)
+            .Select(player => ToRoomPlayer(player, visibleRolls.LastOrDefault(roll => roll.TargetPlayerId == player.Id))).ToArray();
         return new RoomSnapshot(
             code,
             room.Name,
@@ -646,12 +975,31 @@ public sealed class TableHub : Hub
             room.AllowSpectators,
             config.MaxSpectatorsPerRoom,
             viewer.Id,
+            viewer.AccountId,
             viewer.IsMaster,
             viewer.IsSpectator,
             players,
             Spectators(room),
             visibleRolls,
-            room.Chat.ToArray());
+            room.Chat.ToArray(),
+            room.Notes.ToArray(),
+            room.OwnerAccountId is not null);
+    }
+
+    private static RoomPlayer ToRoomPlayer(PlayerState player, SharedRoll? lastRoll)
+    {
+        var account = player.AccountId is null ? null : AccountStore.Instance.Find(player.AccountId);
+        return new RoomPlayer(
+            player.Id,
+            player.Name,
+            player.CharacterName,
+            player.IsMaster,
+            player.ConnectionId is not null,
+            player.Color,
+            lastRoll,
+            account?.Id,
+            account?.AvatarVersion ?? 0,
+            account is null ? null : AccountStore.Instance.Status(account.Id));
     }
 
     private RoomRoster CreateRoster(string code)
@@ -664,15 +1012,17 @@ public sealed class TableHub : Hub
         }
     }
 
-    private RoomRoster CreateRoster(string code, RoomState room) => new(
+    private RoomRoster CreateRoster(string code, RoomState room) => CreateRosterFor(code, room);
+
+    private static RoomRoster CreateRosterFor(string code, RoomState room) => new(
         code,
         room.Name,
         room.MaxPlayers,
         room.IsPublic,
         room.AllowSpectators,
-        config.MaxSpectatorsPerRoom,
-        room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc).Select(player =>
-            new RoomPlayer(player.Id, player.Name, player.CharacterName, player.IsMaster, player.ConnectionId is not null, player.Color, null)).ToArray(),
+        maxSpectatorsSetting,
+        room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc)
+            .Select(player => ToRoomPlayer(player, null)).ToArray(),
         Spectators(room));
 
     private static RoomSpectator[] Spectators(RoomState room) => room.Players.Values
@@ -724,6 +1074,9 @@ public sealed class TableHub : Hub
         public Dictionary<string, string> ConnectionPlayers { get; } = new(StringComparer.Ordinal);
         public List<SharedRoll> Rolls { get; } = new();
         public List<ChatMessage> Chat { get; } = new();
+        public List<RoomNote> Notes { get; set; } = new();
+        // Conta do mestre que criou a sala: com ela, a sala fica salva em disco.
+        public string? OwnerAccountId { get; set; }
         public string Name { get; set; } = string.Empty;
         public int MaxPlayers { get; set; } = 8;
         public bool IsPublic { get; set; }
@@ -748,5 +1101,6 @@ public sealed class TableHub : Hub
         public DateTime JoinedAtUtc { get; init; }
         public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
         public DateTime LastReactionUtc { get; set; } = DateTime.MinValue;
+        public string? AccountId { get; set; }
     }
 }

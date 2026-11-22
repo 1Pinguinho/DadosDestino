@@ -1,0 +1,206 @@
+namespace RolagemRpg;
+
+// Fichas do sistema da mesa. Ficam na conta de cada jogador, no computador de quem
+// hospeda (dados/contas/<id>/fichas.json). Tudo o que chega do site passa por
+// Normalize(): textos cortados, números dentro dos limites, listas com tamanho máximo.
+public sealed class SheetDocument
+{
+    public const int MaxSheets = 20;
+
+    public int Version { get; set; }
+    public string? ActiveId { get; set; }
+    public List<Sheet> Sheets { get; set; } = new();
+
+    public void Normalize()
+    {
+        Sheets = (Sheets ?? new()).Where(sheet => sheet is not null).Take(MaxSheets).ToList();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var sheet in Sheets)
+        {
+            sheet.Normalize();
+            if (!seen.Add(sheet.Id))
+            {
+                sheet.Id = Guid.NewGuid().ToString("N");
+                seen.Add(sheet.Id);
+            }
+        }
+        if (ActiveId is null || !seen.Contains(ActiveId))
+        {
+            ActiveId = Sheets.FirstOrDefault()?.Id;
+        }
+    }
+
+    public Sheet? Active => Sheets.FirstOrDefault(sheet => sheet.Id == ActiveId);
+}
+
+public sealed class Sheet
+{
+    // Perícia → atributo (igual à ficha do grupo). A ordem é a da ficha.
+    public static readonly (string Id, string Attribute)[] SkillList =
+    {
+        ("acrobacia", "agl"), ("crime", "agl"), ("furtividade", "agl"), ("pilotagem", "agl"),
+        ("pontaria", "agl"), ("reflexos", "agl"), ("luta", "agl"),
+        ("atletismo", "for"),
+        ("atualidades", "int"), ("magia", "int"), ("artes", "int"), ("enganacao", "int"),
+        ("ciencias", "int"), ("investigacao", "int"), ("medicina", "int"), ("sobrevivencia", "int"),
+        ("ferraria", "int"), ("tecnologia", "int"), ("armeiro", "int"),
+        ("arcano", "pre"), ("intimidacao", "pre"), ("religiao", "pre"), ("vontade", "pre"),
+        ("intuicao", "pre"), ("percepcao", "pre"), ("diplomacia", "pre"),
+        ("fortitude", "con"),
+    };
+    public static readonly string[] AttributeIds = { "agl", "for", "int", "pre", "con" };
+    public static readonly string[] QuickRollKinds = { "test", "attack", "physical", "magic", "pierce", "recovery" };
+    public const int MaxStatus = 9999;
+    public const int MinHp = -999;
+
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Age { get; set; } = string.Empty;
+    public int Level { get; set; }
+    public string Race { get; set; } = string.Empty;
+    public StatBlock Hp { get; set; } = new();
+    public StatBlock Ea { get; set; } = new();
+    public StatBlock San { get; set; } = new();
+    public Dictionary<string, AttributeValue> Attributes { get; set; } = new();
+    public Dictionary<string, SkillValue> Skills { get; set; } = new();
+    public Resistances Resist { get; set; } = new();
+    public string Elements { get; set; } = string.Empty;
+    public string ExtraElements { get; set; } = string.Empty;
+    public int SkillPoints { get; set; }
+    public int AttributePoints { get; set; }
+    public int AbilityPoints { get; set; }
+    public int AttributeLimit { get; set; }
+    public int ShortRests { get; set; }
+    public List<bool> Rests { get; set; } = new();
+    public string Initiative { get; set; } = string.Empty;
+    public string Reaction { get; set; } = string.Empty;
+    public List<string> Effects { get; set; } = new();
+    public List<string> Abilities { get; set; } = new();
+    public List<string> Inventory { get; set; } = new();
+    public List<QuickRoll> QuickRolls { get; set; } = new();
+
+    public int AttributeValue(string id) => Attributes.TryGetValue(id, out var value) ? value.Value : 0;
+
+    // Teste da perícia: treinado + outros + metade do atributo (para baixo).
+    public int SkillTest(string skillId)
+    {
+        var attribute = SkillList.FirstOrDefault(skill => skill.Id == skillId).Attribute;
+        if (attribute is null)
+        {
+            return 0;
+        }
+        var skill = Skills.TryGetValue(skillId, out var value) ? value : new SkillValue();
+        return skill.Trained + skill.Other + (int)Math.Floor(AttributeValue(attribute) / 2.0);
+    }
+
+    public void Normalize()
+    {
+        Id = Clean(Id, 40);
+        if (Id.Length == 0 || Id.Any(character => !char.IsLetterOrDigit(character) && character != '-'))
+        {
+            Id = Guid.NewGuid().ToString("N");
+        }
+        Name = Clean(Name, 40);
+        Age = Clean(Age, 20);
+        Level = Clamp(Level, 0, 999);
+        Race = Clean(Race, 40);
+        Hp = (Hp ?? new()).Normalized(MinHp);
+        Ea = (Ea ?? new()).Normalized(0);
+        San = (San ?? new()).Normalized(0);
+        Attributes = AttributeIds.ToDictionary(id => id, id =>
+        {
+            var value = Attributes?.GetValueOrDefault(id) ?? new AttributeValue();
+            return new AttributeValue { Value = Clamp(value.Value, -99, 99), Bonus = Clamp(value.Bonus, -99, 99) };
+        });
+        Skills = SkillList.ToDictionary(skill => skill.Id, skill =>
+        {
+            var value = Skills?.GetValueOrDefault(skill.Id) ?? new SkillValue();
+            return new SkillValue { Trained = Clamp(value.Trained, -99, 99), Other = Clamp(value.Other, -99, 99) };
+        });
+        Resist = new Resistances
+        {
+            Physical = Clamp(Resist?.Physical ?? 0, 0, 999),
+            Magic = Clamp(Resist?.Magic ?? 0, 0, 999),
+            Pierce = Clamp(Resist?.Pierce ?? 0, 0, 999),
+        };
+        Elements = Clean(Elements, 80);
+        ExtraElements = Clean(ExtraElements, 80);
+        SkillPoints = Clamp(SkillPoints, -999, 999);
+        AttributePoints = Clamp(AttributePoints, -999, 999);
+        AbilityPoints = Clamp(AbilityPoints, -999, 999);
+        AttributeLimit = Clamp(AttributeLimit, 0, 99);
+        ShortRests = Clamp(ShortRests, 0, 10);
+        Rests = (Rests ?? new()).Take(10).ToList();
+        while (Rests.Count < ShortRests)
+        {
+            Rests.Add(false);
+        }
+        Rests = Rests.Take(ShortRests).ToList();
+        Initiative = Clean(Initiative, 30);
+        Reaction = Clean(Reaction, 40);
+        Effects = CleanList(Effects);
+        Abilities = CleanList(Abilities);
+        Inventory = CleanList(Inventory);
+        QuickRolls = (QuickRolls ?? new()).Where(roll => roll is not null).Take(24).Select(roll => new QuickRoll
+        {
+            Name = Clean(roll.Name, 30),
+            Notation = Clean(roll.Notation, 60),
+            Kind = QuickRollKinds.Contains(roll.Kind) ? roll.Kind : "test",
+        }).Where(roll => roll.Name.Length > 0 && roll.Notation.Length > 0).ToList();
+    }
+
+    private static List<string> CleanList(List<string>? items) =>
+        (items ?? new()).Select(item => Clean(item, 120)).Where(item => item.Length > 0).Take(60).ToList();
+
+    public static string Clean(string? text, int max)
+    {
+        var cleaned = new string((text ?? string.Empty).Where(character => !char.IsControl(character)).ToArray()).Trim();
+        return cleaned.Length > max ? cleaned[..max] : cleaned;
+    }
+
+    public static int Clamp(int value, int min, int max) => Math.Min(max, Math.Max(min, value));
+}
+
+public sealed class StatBlock
+{
+    public int Max { get; set; }
+    public int Current { get; set; }
+    public int Other { get; set; }
+
+    public StatBlock Normalized(int minCurrent)
+    {
+        var max = Sheet.Clamp(Max, 0, Sheet.MaxStatus);
+        return new StatBlock
+        {
+            Max = max,
+            Current = Sheet.Clamp(Current, minCurrent, max),
+            Other = Sheet.Clamp(Other, -Sheet.MaxStatus, Sheet.MaxStatus),
+        };
+    }
+}
+
+public sealed class AttributeValue
+{
+    public int Value { get; set; }
+    public int Bonus { get; set; }
+}
+
+public sealed class SkillValue
+{
+    public int Trained { get; set; }
+    public int Other { get; set; }
+}
+
+public sealed class Resistances
+{
+    public int Physical { get; set; }
+    public int Magic { get; set; }
+    public int Pierce { get; set; }
+}
+
+public sealed class QuickRoll
+{
+    public string Name { get; set; } = string.Empty;
+    public string Notation { get; set; } = string.Empty;
+    public string Kind { get; set; } = "test";
+}

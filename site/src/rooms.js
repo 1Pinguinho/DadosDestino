@@ -3,6 +3,7 @@
 // da sala e o link de convite do anfitrião.
 import { t, errorText } from './i18n.js';
 import { getSettings } from './settings.js';
+import { currentAccount, onAccountChange, sessionToken } from './account.js';
 
 const $ = (selector) => document.querySelector(selector);
 const nameInput = $('#player-name');
@@ -172,6 +173,9 @@ function selectTab(tab) {
   }
   updateCharacterLabel();
   clearInterval(searchTimer);
+  if (tab === 'mine') {
+    loadMyRooms();
+  }
   if (tab === 'search') {
     loadPublicRooms();
     searchTimer = setInterval(() => {
@@ -434,6 +438,138 @@ function renderPublicRooms() {
 searchInput.addEventListener('input', renderPublicRooms);
 $('#room-search-refresh').addEventListener('click', () => loadPublicRooms());
 
+// ---------- minhas mesas (mestre com conta) ----------
+
+let myRooms = null;
+let armedDelete = '';
+
+async function loadMyRooms() {
+  const empty = $('#my-rooms-empty');
+  if (!currentAccount()) {
+    myRooms = null;
+    $('#my-rooms').replaceChildren();
+    empty.hidden = false;
+    empty.textContent = t('mine.loginFirst');
+    return;
+  }
+  empty.hidden = false;
+  empty.textContent = t('search.loading');
+  try {
+    await ensureConnection();
+    myRooms = await connection.invoke('ListMyRooms');
+  } catch (error) {
+    myRooms = null;
+    $('#my-rooms').replaceChildren();
+    empty.textContent = errorText(error, 'search.failed');
+    return;
+  }
+  renderMyRooms();
+}
+
+function renderMyRooms() {
+  const list = $('#my-rooms');
+  const empty = $('#my-rooms-empty');
+  list.replaceChildren();
+  if (!myRooms) {
+    return;
+  }
+  empty.hidden = myRooms.length > 0;
+  empty.textContent = t('mine.empty');
+  for (const room of myRooms) {
+    const item = document.createElement('li');
+    const info = document.createElement('div');
+    const name = document.createElement('strong');
+    const meta = document.createElement('span');
+    const stats = document.createElement('span');
+    const actions = document.createElement('div');
+    item.className = 'room-result';
+    info.className = 'room-result-info';
+    name.textContent = room.name;
+    meta.className = 'room-result-meta';
+    meta.textContent = `${room.code} · ${t(room.isOpen ? 'mine.open' : 'mine.closed')}`;
+    stats.className = 'room-result-stats';
+    stats.textContent = t('mine.notes', { count: room.notes });
+    info.append(name, meta, stats);
+    actions.className = 'room-result-actions';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'room-button room-button-primary';
+    open.textContent = t(room.isOpen ? 'join.submit' : 'mine.reopen');
+    open.addEventListener('click', () => reopenRoom(room.code));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'room-button room-delete';
+    const armed = armedDelete === room.code;
+    remove.classList.toggle('is-armed', armed);
+    remove.textContent = t(armed ? 'mine.confirmDelete' : 'mine.delete');
+    remove.addEventListener('click', async () => {
+      if (armedDelete !== room.code) {
+        armedDelete = room.code;
+        renderMyRooms();
+        return;
+      }
+      armedDelete = '';
+      try {
+        await connection.invoke('DeleteMyRoom', room.code);
+        say(lobbyFeedback, 'mine.deleted');
+      } catch (error) {
+        sayError(lobbyFeedback, error, 'room.joinFailed');
+      }
+      loadMyRooms();
+    });
+    actions.append(open, remove);
+    item.append(info, actions);
+    list.append(item);
+  }
+}
+
+async function reopenRoom(code) {
+  try {
+    say(lobbyFeedback);
+    const playerName = readName();
+    const characterName = readCharacter(false);
+    lockLobby(true);
+    await ensureConnection();
+    const result = await connection.invoke('ReopenRoom', {
+      code,
+      playerName,
+      characterName,
+      color: getSettings().seatColor,
+    });
+    enteredRoom(result, false);
+  } catch (error) {
+    sayError(lobbyFeedback, error, 'room.joinFailed');
+  } finally {
+    lockLobby(false);
+  }
+}
+
+// O servidor precisa saber de quem é esta conexão (para fichas, notas e mesas salvas).
+async function authenticateHub() {
+  if (connection.state !== window.signalR.HubConnectionState.Connected) {
+    return;
+  }
+  try {
+    await connection.invoke('Authenticate', sessionToken() || null);
+  } catch {
+    // Servidor antigo ou sessão inválida: segue sem conta.
+  }
+}
+
+onAccountChange(async (account) => {
+  $('#tab-mine').hidden = !account;
+  if (!account && lobbyTab === 'mine') {
+    selectTab('create');
+  }
+  await authenticateHub();
+  if (lobbyTab === 'mine') {
+    loadMyRooms();
+  }
+  if (account && !nameInput.value.trim()) {
+    nameInput.value = account.username.slice(0, 22);
+  }
+});
+
 // ---------- painel da sala ----------
 
 function updateRollControls(room) {
@@ -629,6 +765,9 @@ function renderRoom(room) {
   // Só a sala completa (ao entrar ou reconectar) traz a conversa guardada.
   if (Array.isArray(room.chat)) {
     window.dispatchEvent(new CustomEvent('room-chat-history', { detail: room.chat }));
+  }
+  if (Array.isArray(room.notes)) {
+    window.dispatchEvent(new CustomEvent('room-notes', { detail: room.notes }));
   }
 }
 
@@ -855,6 +994,13 @@ connection.on('Reaction', (reaction) => {
   window.dispatchEvent(new CustomEvent('room-reaction', { detail: reaction }));
 });
 
+connection.on('NotesUpdated', (notes) => {
+  if (activeRoom) {
+    activeRoom = { ...activeRoom, notes };
+    window.dispatchEvent(new CustomEvent('room-notes', { detail: notes }));
+  }
+});
+
 // O mestre tirou esta pessoa da sala.
 connection.on('Kicked', (info) => {
   if (activeRoom && info?.code === activeRoom.code) {
@@ -869,6 +1015,7 @@ connection.onreconnected(async () => {
     return;
   }
   try {
+    await authenticateHub();
     const result = await connection.invoke('JoinRoom', {
       code: activeRoom.code,
       playerName: nameInput.value.trim(),
@@ -889,6 +1036,7 @@ async function startRoomConnection() {
   try {
     await ensureConnection();
     setConnectionStatus(true, 'status.connected');
+    await authenticateHub();
     try {
       limits = await connection.invoke('GetLimits');
     } catch {
@@ -943,6 +1091,9 @@ export function createRoomManager({ onRoomRoll, onRoomHistory, onRoomState }) {
     sendReaction: (targetPlayerId, emoji) => (activeRoom
       ? connection.invoke('SendReaction', targetPlayerId, emoji)
       : Promise.resolve()),
+    // Outras ações da sala (notas, combate): o hub responde com erros em código.
+    invoke: (method, ...args) => (activeRoom ? connection.invoke(method, ...args) : Promise.reject(new Error('NOT_IN_ROOM'))),
+    getRoom: () => activeRoom,
   };
 }
 

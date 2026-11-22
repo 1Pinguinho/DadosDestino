@@ -69,6 +69,7 @@ public static class ServerBuilder
             tunnel.Start();
             return Results.Ok();
         });
+        app.MapAccountEndpoints();
         app.MapHub<TableHub>("/tableHub");
         return app;
     }

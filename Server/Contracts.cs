@@ -29,7 +29,17 @@ public sealed record KickRequest(string PlayerId, bool Ban);
 public sealed record JoinResponse(RoomSnapshot Room, string ReconnectToken, string PlayerId);
 
 // Color: a cor da mesa do jogador (uma das cores da lista em TableHub.PlayerColors).
-public sealed record RoomPlayer(string Id, string Name, string CharacterName, bool IsMaster, bool IsOnline, string Color, SharedRoll? LastRoll);
+// AccountId/AvatarVersion: quem entrou com conta (foto em /api/avatars/{AccountId}).
+// Status: HP e EA da ficha ativa, para as barrinhas da mesa.
+public sealed record RoomPlayer(string Id, string Name, string CharacterName, bool IsMaster, bool IsOnline, string Color, SharedRoll? LastRoll,
+    string? AccountId, int AvatarVersion, SheetStatus? Status);
+
+public sealed record ReopenRoomRequest(string Code, string PlayerName, string CharacterName, string? Color);
+
+// Uma mesa salva do mestre, para "Minhas mesas".
+public sealed record MyRoom(string Code, string Name, bool IsOpen, int Players, int Notes);
+
+public sealed record NoteRequest(string? Id, string Title, string Text);
 
 public sealed record RoomSpectator(string Id, string Name, bool IsOnline);
 
@@ -51,12 +61,15 @@ public sealed record RoomSnapshot(
     bool AllowSpectators,
     int MaxSpectators,
     string MyPlayerId,
+    string? MyAccountId,
     bool IsMaster,
     bool IsSpectator,
     IReadOnlyList<RoomPlayer> Players,
     IReadOnlyList<RoomSpectator> Spectators,
     IReadOnlyList<SharedRoll> Rolls,
-    IReadOnlyList<ChatMessage> Chat);
+    IReadOnlyList<ChatMessage> Chat,
+    IReadOnlyList<RoomNote> Notes,
+    bool IsSaved);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
 public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp);
@@ -78,8 +91,14 @@ public sealed record ServerLimits(int MaxPlayersPerRoom, int MaxSpectatorsPerRoo
 // Um dado da rolagem, para os outros verem a mesma animação (lados -1 = dado Fate).
 public sealed record RollDie(int Sides, double Value, double Natural, bool Used);
 
-public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor, string DiceStyle);
+// Kind: "normal", "recovery" (poção), "damage", "attack", "reflex", "initiative", "medicine".
+// EffectTargetId: em quem a rolagem age (poção em outro jogador, ataque, socorro).
+// Applied: quanto foi aplicado de verdade na ficha (ex.: cura limitada pela vida máxima).
+public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor, string DiceStyle,
+    string Kind, string? EffectTargetId, string? RecoverStat, string? DamageType, int ManaCost, int? Applied);
 
 // DiceColor: a cor dos dados de quem rolou ("classic" = uma cor por tipo de dado).
 // DiceStyle: o modelo dos dados (formato e símbolos), um da lista em TableHub.DiceStyles.
-public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor, string? DiceStyle);
+// RecoverStat: "hp" ou "ea". DamageType: "physical", "magic" ou "pierce". ManaCost: EA gasta na magia.
+public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor, string? DiceStyle,
+    string? Kind = null, string? EffectTargetId = null, string? RecoverStat = null, string? DamageType = null, int ManaCost = 0);

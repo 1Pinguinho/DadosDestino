@@ -55,6 +55,53 @@
           </div>
           <div class="table-status"><span id="connection-dot" class="status-dot"></span><span id="connection-status" data-i18n="status.connecting">CONECTANDO</span></div>
           <button id="app-home" class="app-home" type="button" data-i18n="app.home" hidden>INÍCIO</button>
+          <div class="settings-anchor account-anchor">
+            <button id="account-toggle" class="account-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="account-panel">
+              <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
+              <span id="account-label" class="account-label" data-i18n="account.signIn">ENTRAR</span>
+            </button>
+            <div id="account-panel" class="settings-panel account-panel" role="dialog" aria-labelledby="account-title" hidden>
+              <div class="settings-head">
+                <strong id="account-title" data-i18n="account.title">Sua conta</strong>
+                <button id="account-close" class="settings-close" type="button" data-i18n-aria="settings.close">×</button>
+              </div>
+              <div class="settings-body">
+                <form id="account-form" class="account-form">
+                  <div id="account-mode" class="segmented" role="group">
+                    <button type="button" data-mode="login" aria-pressed="true" data-i18n="account.login">Entrar</button>
+                    <button type="button" data-mode="register" aria-pressed="false" data-i18n="account.register">Criar conta</button>
+                  </div>
+                  <label class="room-field" for="account-username"><span data-i18n="account.username">USUÁRIO</span>
+                    <input id="account-username" type="text" maxlength="24" autocomplete="username" spellcheck="false" />
+                  </label>
+                  <label class="room-field" for="account-password"><span data-i18n="account.password">SENHA</span>
+                    <input id="account-password" type="password" maxlength="128" autocomplete="current-password" />
+                  </label>
+                  <label class="check-row" for="account-remember">
+                    <input id="account-remember" type="checkbox" checked />
+                    <span><strong data-i18n="account.remember">Lembrar de mim</strong><small data-i18n="account.rememberHint">Continua conectado por 90 dias neste navegador.</small></span>
+                  </label>
+                  <button id="account-submit" class="room-button room-button-primary" type="submit" data-i18n="account.login">Entrar</button>
+                  <p class="field-hint" data-i18n="account.hostHint">A conta fica guardada no computador de quem hospeda a mesa.</p>
+                </form>
+                <div id="account-info" class="account-info" hidden>
+                  <div class="account-who">
+                    <span id="account-photo" class="account-photo" aria-hidden="true"></span>
+                    <span><strong id="account-name"></strong><small data-i18n="account.here">Conta deste servidor</small></span>
+                  </div>
+                  <div class="account-actions">
+                    <button id="account-photo-change" class="room-button" type="button" data-i18n="account.photo">Trocar foto</button>
+                    <button id="account-export" class="room-button" type="button" data-i18n="account.export">Exportar fichas</button>
+                    <button id="account-import" class="room-button" type="button" data-i18n="account.import">Importar fichas</button>
+                  </div>
+                  <input id="account-photo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+                  <input id="account-import-file" type="file" accept="application/json,.json" hidden />
+                  <button id="account-logout" class="leave-button" type="button" data-i18n="account.logout">SAIR DA CONTA</button>
+                </div>
+                <p id="account-feedback" class="room-feedback" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
           <div class="settings-anchor">
             <button id="settings-toggle" class="icon-button settings-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-panel" data-i18n-aria="settings.open" data-i18n-title="settings.open"><svg class="icon"><use href="#i-gear" /></svg></button>
             <div id="settings-panel" class="settings-panel" role="dialog" aria-labelledby="settings-title" hidden>
@@ -174,6 +221,7 @@
               <button id="tab-create" type="button" role="tab" aria-selected="true" aria-controls="panel-create" data-tab="create" data-i18n="lobby.tabCreate">Criar sala</button>
               <button id="tab-join" type="button" role="tab" aria-selected="false" aria-controls="panel-join" data-tab="join" data-i18n="lobby.tabJoin">Entrar com código</button>
               <button id="tab-search" type="button" role="tab" aria-selected="false" aria-controls="panel-search" data-tab="search" data-i18n="lobby.tabSearch">Procurar salas</button>
+              <button id="tab-mine" type="button" role="tab" aria-selected="false" aria-controls="panel-mine" data-tab="mine" data-i18n="lobby.tabMine" hidden>Minhas mesas</button>
             </div>
 
             <form id="panel-create" class="lobby-panel" role="tabpanel" aria-labelledby="tab-create">
@@ -231,6 +279,12 @@
               <p id="room-results-empty" class="room-results-empty"></p>
             </div>
 
+            <div id="panel-mine" class="lobby-panel" role="tabpanel" aria-labelledby="tab-mine" hidden>
+              <p class="field-hint" data-i18n="mine.hint">Mesas que você criou com sua conta. As notas ficam guardadas; reabra com o mesmo código.</p>
+              <ul id="my-rooms" class="room-results"></ul>
+              <p id="my-rooms-empty" class="room-results-empty"></p>
+            </div>
+
             <p id="lobby-feedback" class="room-feedback" role="status" aria-live="polite"></p>
           </div>
         </section>
@@ -246,6 +300,15 @@
             <div class="d20-stamp" aria-hidden="true"><span>20</span><small data-i18n="page.natural">NATURAL</small></div>
           </div>
         </section>
+
+        <nav id="room-views" class="room-views" role="tablist" data-i18n-aria="views.label">
+          <button type="button" role="tab" aria-selected="true" data-view="table" data-i18n="views.table">Mesa</button>
+          <button type="button" role="tab" aria-selected="false" data-view="sheet" data-i18n="views.sheet">Ficha</button>
+          <button type="button" role="tab" aria-selected="false" data-view="notes"><span data-i18n="views.notes">Notas</span><span id="notes-count" class="view-count"></span></button>
+        </nav>
+
+        <section id="sheet-view" class="sheet-view" aria-labelledby="sheet-title" hidden></section>
+        <section id="notes-view" class="notes-view" aria-labelledby="notes-title" hidden></section>
 
         <section class="party-table" aria-labelledby="table-title">
           <div class="table-head">
@@ -300,11 +363,36 @@
                 <button id="shortcut-edit" class="text-button" type="button" aria-pressed="false" data-i18n="shortcut.edit">EDITAR</button>
               </div>
               <div id="quick-options" class="quick-options"></div>
+              <div id="sheet-rolls-block" class="sheet-rolls-block" hidden>
+                <span class="field-label" data-i18n="roller.sheetRolls">DA FICHA</span>
+                <div id="sheet-rolls" class="quick-options"></div>
+              </div>
               <div id="shortcut-form" class="shortcut-form" hidden>
                 <input id="shortcut-name" type="text" maxlength="24" autocomplete="off" data-i18n-placeholder="shortcut.name" data-i18n-aria="shortcut.name" />
                 <input id="shortcut-notation" type="text" maxlength="60" autocomplete="off" spellcheck="false" data-i18n-placeholder="shortcut.notation" data-i18n-aria="shortcut.notation" />
                 <button id="shortcut-save" class="room-button room-button-primary" type="button" data-i18n="shortcut.save">Salvar</button>
                 <button id="shortcut-cancel" class="room-button" type="button" data-i18n="shortcut.cancel">Cancelar</button>
+              </div>
+            </div>
+
+            <div id="roll-kind-controls" class="roll-kind" hidden>
+              <label class="field-label" for="roll-kind" data-i18n="kind.label">TIPO DE ROLAGEM</label>
+              <div class="roll-kind-row">
+                <select id="roll-kind">
+                  <option value="normal" data-i18n="kind.normal">Normal</option>
+                  <option value="physical" data-i18n="kind.physical">Dano físico</option>
+                  <option value="magic" data-i18n="kind.magic">Dano mágico</option>
+                  <option value="pierce" data-i18n="kind.pierce">Dano de perfuração</option>
+                  <option value="recovery" data-i18n="kind.recovery">Recuperação (poção)</option>
+                </select>
+                <select id="recover-stat" data-i18n-aria="kind.recoverStat" hidden>
+                  <option value="hp" data-i18n="kind.hp">Vida</option>
+                  <option value="ea" data-i18n="kind.ea">Mana (EA)</option>
+                </select>
+                <select id="effect-target" data-i18n-aria="kind.whom" hidden></select>
+                <label id="mana-cost-field" class="mana-cost" hidden><span data-i18n="kind.manaCost">EA GASTA</span>
+                  <input id="mana-cost" type="number" min="0" max="9999" value="0" inputmode="numeric" />
+                </label>
               </div>
             </div>
 

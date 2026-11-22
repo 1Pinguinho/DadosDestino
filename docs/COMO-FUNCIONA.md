@@ -14,6 +14,12 @@ DadosDestino/
 │   │   ├── dice-animation.js  animação dos dados
 │   │   ├── dice-shapes.js     desenho de cada dado (faces lapidadas) e dos materiais
 │   │   ├── shortcuts.js       atalhos de rolagem (padrões e os criados pelo jogador)
+│   │   ├── chat.js            chat da sala
+│   │   ├── reactions.js       reações que flutuam nas mesas
+│   │   ├── account.js         conta: entrar, criar, foto, exportar e importar fichas
+│   │   ├── sheet.js           a ficha do personagem
+│   │   ├── notes.js           notas da mesa
+│   │   ├── rollkind.js        tipo da rolagem (dano, magia, poção)
 │   │   ├── sound.js           som dos dados (gerado na hora, sem arquivos de áudio)
 │   │   ├── titlebar.js        barra de título do app, na cor do tema
 │   │   ├── i18n.js            troca de idioma
@@ -32,7 +38,9 @@ DadosDestino/
 │   └── preferencias.json  as suas configurações no app (veja abaixo)
 └── dados/               vem com o conector; o resto é criado ao abrir o app
     ├── navegador/       dados da janela do app (nome do jogador, histórico)
-    └── conector/        o conector da Cloudflare (cloudflared.exe) e a licença dele
+    ├── conector/        o conector da Cloudflare (cloudflared.exe) e a licença dele
+    ├── contas/          contas dos jogadores: contas.json e uma pasta por conta (fichas e foto)
+    └── salas/           mesas salvas dos mestres com conta (nome, configurações e notas)
 ```
 
 Se a pasta do app não aceitar escrita (por exemplo, dentro de "Arquivos de Programas"),
@@ -96,6 +104,11 @@ padrão, menos o idioma e os atalhos.
   como a mesma pessoa, na mesma mesa.
 - **Chat:** fica na aba **Chat**, ao lado do histórico. Mensagens de até 500 caracteres; as
   últimas 200 ficam guardadas no computador do anfitrião enquanto a sala existir.
+- **Mesas salvas:** se o mestre criar a sala entrando na conta, a mesa fica salva em
+  `dados/salas/`. Ela sai do ar quando o app fecha, mas o mestre reabre com o mesmo código em
+  **Minhas mesas**. Quem tentar entrar antes vê "O mestre ainda não abriu esta mesa".
+- **Notas:** na aba **Notas** da sala. Cada pessoa com conta cria cartões; quem escreveu edita
+  e apaga, e o mestre apaga qualquer um. Em mesa salva, as notas ficam até alguém apagar.
 - **Reações:** o botão com a carinha, na mesa de outro jogador, abre 8 emojis. A reação
   aparece só por alguns segundos e não fica guardada (uma por segundo por pessoa).
 
@@ -110,7 +123,7 @@ de novo no app).
 
 ## Segurança, em resumo
 
-- Sem contas e sem cookies. Nome, personagem e histórico ficam no navegador de cada um.
+- Contas ficam no computador de quem hospeda, com a senha guardada só como hash. Depois de 10 senhas erradas, o login fica bloqueado por alguns minutos. Sem cookies.
 - A página só carrega arquivos do próprio app (política de segurança de conteúdo).
 - O servidor recusa pedidos vindos de outros sites e endereços falsos.
 - Há limite de ações por segundo, de conexões e de tentativas com código errado.

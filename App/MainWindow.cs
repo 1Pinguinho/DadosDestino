@@ -234,8 +234,44 @@ public sealed class MainWindow : Form
             };
             core.NavigationStarting += OnNavigationStarting;
             core.FrameNavigationStarting += OnNavigationStarting;
-            // Nenhuma mesa precisa baixar arquivos nem usar câmera, microfone ou localização.
-            core.DownloadStarting += (_, args) => args.Cancel = true;
+            // Nenhuma mesa precisa usar câmera, microfone ou localização. Downloads também
+            // ficam bloqueados, menos o "Exportar fichas": um .json criado pela própria
+            // página (blob:) e salvo sempre pela janela de salvar do Windows.
+            core.DownloadStarting += (_, args) =>
+            {
+                var pageOrigin = Uri.TryCreate(core.Source, UriKind.Absolute, out var page) ? page.GetLeftPart(UriPartial.Authority) : null;
+                if (pageOrigin is null
+                    || !args.DownloadOperation.Uri.StartsWith("blob:" + pageOrigin + "/", StringComparison.OrdinalIgnoreCase)
+                    || !args.ResultFilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Cancel = true;
+                    return;
+                }
+                var deferral = args.GetDeferral();
+                BeginInvoke(() =>
+                {
+                    using (deferral)
+                    {
+                        using var dialog = new SaveFileDialog
+                        {
+                            FileName = Path.GetFileName(args.ResultFilePath),
+                            Filter = "JSON (*.json)|*.json",
+                            DefaultExt = "json",
+                            AddExtension = true,
+                            OverwritePrompt = true,
+                        };
+                        if (dialog.ShowDialog(this) == DialogResult.OK)
+                        {
+                            args.ResultFilePath = dialog.FileName;
+                            args.Handled = true;
+                        }
+                        else
+                        {
+                            args.Cancel = true;
+                        }
+                    }
+                });
+            };
             core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
             core.WebMessageReceived += OnWebMessageReceived;
             core.NavigationCompleted += OnNavigationCompleted;
@@ -416,7 +452,19 @@ public sealed class MainWindow : Form
             return;
         }
 
-        if (message?.Action == "host")
+        if (message?.Action == "accounts")
+        {
+            SendAccounts();
+        }
+        else if (message?.Action == "deleteAccount")
+        {
+            if (message.Id is { Length: > 0 and <= 40 } id)
+            {
+                AccountStore.Instance.Delete(id);
+            }
+            SendAccounts();
+        }
+        else if (message?.Action == "host")
         {
             await StartHostingAsync();
         }
@@ -520,5 +568,12 @@ public sealed class MainWindow : Form
         }
     }
 
-    private sealed record BridgeMessage(string? Action, string? Link, string? Language, JsonElement? Settings, string? Command);
+    private sealed record BridgeMessage(string? Action, string? Link, string? Language, JsonElement? Settings, string? Command, string? Id);
+
+    // Lista de contas para a tela inicial (só id e nome; nada de senha).
+    private void SendAccounts()
+    {
+        var accounts = AccountStore.Instance.List().Select(account => new { account.Id, account.Username }).ToArray();
+        webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new { accounts }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
 }

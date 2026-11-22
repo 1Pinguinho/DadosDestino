@@ -10,6 +10,10 @@ import { initShortcuts } from './shortcuts.js';
 import { initTitlebar } from './titlebar.js';
 import { initChat } from './chat.js';
 import { initReactions } from './reactions.js';
+import { avatarUrl, currentAccount, initAccount, onAccountChange } from './account.js';
+import { initSheet } from './sheet.js';
+import { initNotes } from './notes.js';
+import { describeEffect, initRollKind } from './rollkind.js';
 
 initSettings();
 initTitlebar();
@@ -38,6 +42,8 @@ let partyState = { code: '', myPlayerId: '', isMaster: false, players: [], spect
 let feedbackKey = '';
 // Rolagens feitas aqui: o eco que volta do servidor é ignorado (já animou aqui).
 const localRollsInFlight = new Set();
+const serverEchoes = new Map();
+let rollKind = null;
 // Um lugar por jogador, reaproveitado entre atualizações para a animação não reiniciar.
 const seats = new Map();
 
@@ -104,13 +110,17 @@ function createSeat(playerId) {
   foot.className = 'seat-foot';
   notation.className = 'seat-notation';
   visibility.className = 'seat-visibility';
-  details.append(name, presence);
+  const status = document.createElement('div');
+  status.className = 'seat-status';
+  status.hidden = true;
+  details.append(name, presence, status);
   head.append(avatar, details, actions);
   foot.append(notation, visibility);
   seat.append(head, stage, waiting, foot);
 
   const entry = {
-    seat, avatar, name, presence, actions, stage, waiting, notation, visibility,
+    seat, avatar, name, presence, status, actions, stage, waiting, notation, visibility,
+    avatarKey: '',
     animator: createDiceAnimator(stage, { onLand: playLand, onOutcome: playOutcome }),
     shownRollId: null,
     actionsKey: '',
@@ -124,14 +134,31 @@ function showSeatRoll(entry, roll) {
   entry.waiting.textContent = t('table.waiting');
   entry.stage.hidden = !roll;
   entry.notation.textContent = roll ? roll.notation : '';
-  entry.visibility.textContent = roll?.isPrivate ? t('table.private') : '';
+  const effect = roll ? describeEffect(roll, partyState.players || []) : '';
+  entry.visibility.textContent = [effect, roll?.isPrivate ? t('table.private') : ''].filter(Boolean).join(' · ');
   entry.seat.classList.toggle('has-roll', Boolean(roll));
 }
 
 function updateSeat(entry, player, index, room, lastRoll) {
   entry.seat.dataset.color = player.color || '';
   entry.seat.classList.toggle('is-offline', !player.isOnline);
-  entry.avatar.textContent = player.name.trim().slice(0, 1).toUpperCase();
+  // Foto da conta ao lado do nome; sem foto, a inicial.
+  const photo = avatarUrl(player.accountId, player.avatarVersion);
+  const avatarKey = photo || `letter:${player.name}`;
+  if (entry.avatarKey !== avatarKey) {
+    entry.avatarKey = avatarKey;
+    entry.avatar.replaceChildren();
+    entry.avatar.classList.toggle('has-photo', Boolean(photo));
+    if (photo) {
+      const image = document.createElement('img');
+      image.src = photo;
+      image.alt = '';
+      entry.avatar.append(image);
+    } else {
+      entry.avatar.textContent = player.name.trim().slice(0, 1).toUpperCase();
+    }
+  }
+  updateSeatStatus(entry, player.status);
   entry.name.textContent = `${player.characterName} (${player.name})`;
   entry.presence.textContent = [
     player.isMaster ? t('room.master').toUpperCase() : '',
@@ -182,6 +209,31 @@ function updateSeat(entry, player, index, room, lastRoll) {
     }
     showSeatRoll(entry, lastRoll);
   }
+}
+
+// Barrinhas finas de vida e EA (da ficha ativa de quem entrou com conta).
+function updateSeatStatus(entry, status) {
+  entry.status.hidden = !status;
+  entry.seat.classList.toggle('is-down', Boolean(status && status.hpMax > 0 && status.hp <= 0));
+  if (!status) {
+    return;
+  }
+  entry.status.replaceChildren(...[['hp', status.hp, status.hpMax], ['ea', status.ea, status.eaMax]].map(([stat, value, max]) => {
+    const row = document.createElement('span');
+    const label = document.createElement('b');
+    const bar = document.createElement('span');
+    const fill = document.createElement('i');
+    const numbers = document.createElement('small');
+    row.className = 'seat-stat';
+    row.dataset.stat = stat;
+    label.textContent = t(`stat.${stat}`);
+    bar.className = 'seat-stat-bar';
+    fill.style.width = `${max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0}%`;
+    bar.append(fill);
+    numbers.textContent = `${value}/${max}`;
+    row.append(label, bar, numbers);
+    return row;
+  }));
 }
 
 function removeSeat(playerId) {
@@ -362,7 +414,8 @@ function renderHistory() {
     notation.textContent = entry.notation;
     detail.className = 'history-detail';
     const author = rollAuthor(entry);
-    detail.textContent = `${entry.isPrivate ? `${t('history.private')} · ` : ''}${author ? `${author} · ` : ''}${entry.output}`;
+    const effect = describeEffect(entry, partyState.players || []);
+    detail.textContent = `${entry.isPrivate ? `${t('history.private')} · ` : ''}${author ? `${author} · ` : ''}${effect ? `${effect} · ` : ''}${entry.output}`;
     total.className = 'history-total';
     total.textContent = String(entry.total);
     time.className = 'history-time';
@@ -385,7 +438,11 @@ function renderHistory() {
 // ---------- rolagem ----------
 
 // Guarda a rolagem na mesa e no histórico depois que o total aparece.
-function recordRoll(roll) {
+function recordRoll(localRoll) {
+  // Se o servidor já respondeu, usa a versão dele (traz o que foi aplicado na ficha).
+  const echo = serverEchoes.get(localRoll.id);
+  serverEchoes.delete(localRoll.id);
+  const roll = echo ? { ...localRoll, ...echo } : localRoll;
   mergeHistory([roll]);
   historyList.scrollTop = 0;
   const otherRolls = partyState.rolls.filter((entry) => entry.targetPlayerId !== roll.targetPlayerId && entry.id !== roll.id);
@@ -412,8 +469,20 @@ function rollDice(notation) {
     return;
   }
 
+  let effect = { kind: 'normal' };
+  try {
+    effect = rollKind?.read() || effect;
+  } catch (error) {
+    showFeedback(error.message);
+    return;
+  }
   const rollContext = roomManager?.getRollContext() || { targetPlayerId: '', isPrivate: false };
   const entry = {
+    kind: effect.kind,
+    recoverStat: effect.recoverStat || null,
+    damageType: effect.damageType || null,
+    manaCost: effect.manaCost || 0,
+    effectTargetId: effect.effectTargetId || null,
     id: crypto.randomUUID(),
     notation: roll.notation,
     total: roll.total,
@@ -429,6 +498,7 @@ function rollDice(notation) {
     ...packDice(roll),
   };
   showFeedback();
+  rollKind?.reset();
   rollButton.classList.add('is-rolling');
   localRollsInFlight.add(entry.id);
   // Vai para a sala na hora: todos veem os dados rolarem na mesa ao mesmo tempo.
@@ -517,6 +587,17 @@ renderHistory();
 roomManager = createRoomManager({
   onRoomRoll: (roll) => {
     if (localRollsInFlight.has(roll.id)) {
+      // Eco da própria rolagem: traz o que o servidor aplicou (ex.: cura limitada).
+      if (history.some((entry) => entry.id === roll.id)) {
+        mergeHistory([roll]);
+        partyState.rolls = partyState.rolls.map((entry) => (entry.id === roll.id ? { ...entry, ...roll } : entry));
+        const seat = seats.get(roll.targetPlayerId);
+        if (seat && seat.shownRollId === roll.id && !seat.animator.isPlaying()) {
+          showSeatRoll(seat, roll);
+        }
+      } else {
+        serverEchoes.set(roll.id, roll);
+      }
       return;
     }
     animateOnSeat(roll, () => recordRoll(roll));
@@ -525,6 +606,73 @@ roomManager = createRoomManager({
   onRoomState: (room) => renderPartyTable(room),
 });
 initChat(roomManager);
+const sheets = initSheet();
+initAccount({
+  exportSheets: () => sheets.exportSheets(),
+  importSheets: (parsed) => sheets.importSheets(parsed),
+});
+initNotes(roomManager);
+rollKind = initRollKind({ getRoom: () => partyState, getSheet: () => sheets.active() });
+
+// Abas da sala: Mesa (rolagens), Ficha e Notas.
+const roomViews = document.querySelector('#room-views');
+function selectRoomView(view) {
+  workspace.dataset.view = view;
+  for (const button of roomViews.querySelectorAll('[data-view]')) {
+    button.setAttribute('aria-selected', String(button.dataset.view === view));
+  }
+  document.querySelector('#sheet-view').hidden = view !== 'sheet';
+  document.querySelector('#notes-view').hidden = view !== 'notes';
+}
+roomViews.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-view]');
+  if (button) {
+    selectRoomView(button.dataset.view);
+  }
+});
+window.addEventListener('room-state', (event) => {
+  if (!event.detail?.code) {
+    selectRoomView('table');
+  }
+});
+selectRoomView('table');
+
+// Rolagens rápidas da ficha ativa, no rolador. A magia espera a EA gasta antes de rolar.
+const sheetRollsBlock = document.querySelector('#sheet-rolls-block');
+const sheetRolls = document.querySelector('#sheet-rolls');
+function renderSheetRolls() {
+  const sheet = currentAccount() && partyState.code && !partyState.isSpectator ? sheets.active() : null;
+  const rolls = (sheet?.quickRolls || []).filter((roll) => roll.name && roll.notation);
+  sheetRollsBlock.hidden = rolls.length === 0;
+  sheetRolls.replaceChildren(...rolls.map((roll) => {
+    const button = document.createElement('button');
+    const label = document.createElement('span');
+    const notation = document.createElement('b');
+    button.type = 'button';
+    button.className = 'quick-chip';
+    button.dataset.kind = roll.kind;
+    label.textContent = roll.name;
+    notation.textContent = roll.notation;
+    button.append(label, notation);
+    button.title = t(`quick.${roll.kind}`);
+    button.addEventListener('click', () => {
+      notationInput.value = roll.notation;
+      showFeedback();
+      const selected = rollKind.select(roll.kind);
+      if (selected === 'magic') {
+        showFeedback('kind.chooseMana');
+        document.querySelector('#mana-cost').focus();
+        return;
+      }
+      rollDice(roll.notation);
+    });
+    return button;
+  }));
+}
+sheets.onChange(renderSheetRolls);
+onAccountChange(renderSheetRolls);
+window.addEventListener('room-state', renderSheetRolls);
+
 reactions = initReactions({
   sendReaction: (targetPlayerId, emoji) => roomManager.sendReaction(targetPlayerId, emoji),
   seatFor: (playerId) => seats.get(playerId)?.seat || null,
