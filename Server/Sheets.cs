@@ -235,6 +235,8 @@ public sealed class Power
     // Só recuperação: "hp" ou "ea", e "single" (você ou um aliado) ou "area" (todos os jogadores).
     public string RecoverStat { get; set; } = "hp";
     public string Area { get; set; } = "single";
+    // Só chefes: quantas vezes no combate inteiro (0 = sem limite).
+    public int MaxUses { get; set; }
 
     public bool IsAttack => Kind != "recovery";
 
@@ -259,6 +261,7 @@ public sealed class Power
             StatusId = kind != "recovery" && StatusId is not null && StatusIds.Contains(StatusId) ? StatusId : null,
             RecoverStat = RecoverStat == "ea" ? "ea" : "hp",
             Area = Area == "area" ? "area" : "single",
+            MaxUses = Sheet.Clamp(MaxUses, 0, 99),
         };
     }
 }

@@ -205,7 +205,10 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
   }
   const ATTACK_SKILL = { physical: 'luta', pierce: 'pontaria', magic: 'magia' };
   function attackNotation(current, type) {
-    const sheet = current?.isBoss ? null : getSheet();
+    if (current?.isBoss) {
+      return withBonus(current.boss?.skills?.[ATTACK_SKILL[type]] || 0);
+    }
+    const sheet = getSheet();
     return withBonus(sheet ? skillTest(sheet, ATTACK_SKILL[type]) : 0);
   }
 
@@ -240,7 +243,42 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     if (chosen.type === 'magic') {
       wrap.append(span('attack-hint', t('combat.magicHint')));
     }
+    // Chefe na mão do mestre: arma principal (dano fixo) e habilidades prontas.
+    if (current?.isBoss && current.boss) {
+      wrap.append(bossButtons(current, true));
+    }
     return wrap;
+  }
+
+  function bossPowerUsable(boss, power) {
+    return power.eaCost <= boss.ea && power.cooldownLeft <= 0
+      && !(power.usesPerTurn > 0 && power.usedThisTurn >= power.usesPerTurn)
+      && !(power.maxUses > 0 && power.usedTotal >= power.maxUses);
+  }
+
+  function bossButtons(current, attacks) {
+    const boss = current.boss;
+    const row = document.createElement('div');
+    row.className = 'boss-actions-row';
+    if (attacks && (boss.weaponName || boss.weaponDamage > 0)) {
+      const skill = { magic: 'magia', pierce: 'pontaria' }[boss.weaponType] || 'luta';
+      const notation = withBonus(boss.skills?.[skill] || 0);
+      row.append(button(`⚔ ${boss.weaponName || t('boss.weapon')} (${boss.weaponDamage})`,
+        () => rollNotation(notation, { kind: 'attack', abilityId: 'weapon', damageType: boss.weaponType }), 'combat-button'));
+    }
+    for (const power of boss.powers || []) {
+      if ((power.kind === 'recovery') === attacks) {
+        continue;
+      }
+      const label = `${power.statusId ? `${STATUS_ICONS[power.statusId]} ` : ''}${power.name}${power.eaCost ? ` · ${power.eaCost} EA` : ''}`;
+      const element = attacks
+        ? button(label, () => rollNotation(withBonus(boss.skills?.[power.skill] || 0), { kind: 'attack', abilityId: power.id, damageType: power.kind }), 'combat-button')
+        : button(label, () => run('BossRecover', power.id), 'combat-button');
+      element.disabled = !bossPowerUsable(boss, power);
+      element.title = `${power.notation}${power.maxUses ? ` · ${t('boss.usesTotal', { used: power.usedTotal, max: power.maxUses })}` : ''}${power.cooldownLeft > 1 ? ` · ⏳${power.cooldownLeft - 1}` : ''}`;
+      row.append(element);
+    }
+    return row;
   }
 
   function remaining() {
@@ -281,7 +319,15 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
       const current = fighter(view.currentId);
       const target = fighter(view.targetId);
       const counter = fighter(view.counterId);
-      if (view.step === 'counter' && counter) {
+      const autoBoss = (entry) => Boolean(entry?.isBoss && entry.boss?.auto);
+      if (current && autoBoss(current) && view.step !== 'reflex' && view.step !== 'counter') {
+        // Chefe automático: o servidor joga por ele.
+        text = t('combat.bossAuto', { name: current.name });
+      } else if (view.step === 'counter' && counter && autoBoss(counter)) {
+        text = t('combat.counterOther', { actor: counter.name, target: current?.name || '' });
+      } else if (view.step === 'reflex' && target && autoBoss(target)) {
+        text = t('combat.bossDefending', { name: target.name });
+      } else if (view.step === 'counter' && counter) {
         // Crítico na defesa: quem defendeu contra-ataca, sem defesa do atacante.
         if (controls(counter)) {
           text = t('combat.counterYou', { target: current?.name || '' });
@@ -317,6 +363,9 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           text = t('combat.waitingReflex', { target: target?.name || '', total: view.attackTotal });
         } else if (!target) {
           text = t(current.isBoss ? 'combat.bossTurn' : 'combat.yourTurn', { name: current.name });
+          if (current.isBoss && current.boss?.powers?.some((power) => power.kind === 'recovery')) {
+            actions.append(bossButtons(current, false));
+          }
         } else if (target.down) {
           text = t('combat.rescue', { target: target.name, dt: target.dt });
           const notation = withBonus(current.medicine);
@@ -395,6 +444,22 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     view.fighters.forEach((entry, index) => {
       const item = document.createElement('li');
       item.append(span('combat-order-name', `${entry.name}${entry.initiative !== null && entry.initiative !== undefined ? ` · ${entry.initiative}` : ''}`));
+      // Chefe: EA, ações, automático (liga e desliga a qualquer hora) e como escolhe alvos.
+      if (entry.isBoss && entry.boss) {
+        const boss = entry.boss;
+        item.append(span('combat-boss-info', [
+          boss.eaMax ? `${t('boss.ea')} ${boss.ea}/${boss.eaMax}` : '',
+          boss.actions > 1 ? t('boss.actionsLeft', { left: boss.actionsLeft, total: boss.actions }) : '',
+        ].filter(Boolean).join(' · ')));
+        const auto = button(t(boss.auto ? 'boss.autoOn' : 'boss.autoOff'), () => run('SetBossAuto', entry.id, !boss.auto), 'text-button boss-auto');
+        auto.setAttribute('aria-pressed', String(boss.auto));
+        const targeting = document.createElement('select');
+        targeting.setAttribute('aria-label', t('boss.targeting'));
+        targeting.append(new Option(t('boss.targetRandom'), 'random'), new Option(t('boss.targetAvoidWeak'), 'avoidWeak'));
+        targeting.value = boss.targeting;
+        targeting.addEventListener('change', () => run('SetBossTargeting', entry.id, targeting.value));
+        item.append(auto, targeting);
+      }
       const move = (offset) => {
         const ids = view.fighters.map((candidate) => candidate.id);
         const [moved] = ids.splice(index, 1);
@@ -505,6 +570,10 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     const event = span('combat-event', feedback || [eventText(view.lastEvent), ticksText()].filter(Boolean).join(' — '));
     bar.replaceChildren(head, order, prompt(), event);
     if (isMaster()) {
+      // Aviso só para o mestre, e só com algum chefe no automático.
+      if (view.fighters.some((entry) => entry.boss?.auto)) {
+        bar.append(span('combat-auto-warning', t('boss.tpkWarning')));
+      }
       bar.append(masterTools());
     }
   }

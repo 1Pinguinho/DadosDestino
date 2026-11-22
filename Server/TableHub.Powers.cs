@@ -30,9 +30,15 @@ public sealed partial class TableHub
     }
 
     // Confere e gasta: EA, usos neste turno e recarga. Devolve a habilidade.
-    private static Power UsePower(RoomState room, CombatState? combat, Fighter? fighter, PlayerState actor, string powerId, List<string> changedAccounts)
+    private static Power UsePower(RoomState room, CombatState? combat, Fighter? fighter, PlayerState? actor, string powerId, List<string> changedAccounts)
     {
-        var power = FindPower(actor, powerId);
+        var power = fighter is { IsBoss: true }
+            ? fighter.Powers.FirstOrDefault(candidate => candidate.Id == powerId) ?? throw new HubException("NO_ABILITY")
+            : FindPower(actor ?? throw new HubException("NO_SHEET"), powerId);
+        if (fighter is { IsBoss: true } && power.MaxUses > 0 && fighter.PowerTotalUses.GetValueOrDefault(power.Id) >= power.MaxUses)
+        {
+            throw new HubException("ABILITY_USED");
+        }
         if (fighter is not null)
         {
             if (fighter.PowerCooldowns.TryGetValue(power.Id, out var left) && left > 0)
@@ -44,19 +50,29 @@ public sealed partial class TableHub
                 throw new HubException("ABILITY_USED");
             }
         }
-        if (power.EaCost > 0)
+        if (power.EaCost > 0 && fighter is { IsBoss: true })
         {
-            var status = AccountStore.Instance.Status(actor.AccountId!) ?? throw new HubException("NO_SHEET");
+            // Chefe: a EA é dele, no combate.
+            if (power.EaCost > fighter.Ea)
+            {
+                throw new HubException("NOT_ENOUGH_MANA");
+            }
+            fighter.Ea -= power.EaCost;
+        }
+        else if (power.EaCost > 0)
+        {
+            var status = AccountStore.Instance.Status(actor!.AccountId!) ?? throw new HubException("NO_SHEET");
             if (power.EaCost > status.Ea)
             {
                 throw new HubException("NOT_ENOUGH_MANA");
             }
-            AccountStore.Instance.ChangeStatus(actor.AccountId!, null, "ea", (current, _) => current - power.EaCost);
-            changedAccounts.Add(actor.AccountId!);
+            AccountStore.Instance.ChangeStatus(actor!.AccountId!, null, "ea", (current, _) => current - power.EaCost);
+            changedAccounts.Add(actor!.AccountId!);
         }
         if (fighter is not null)
         {
             fighter.PowerUses[power.Id] = fighter.PowerUses.GetValueOrDefault(power.Id) + 1;
+            fighter.PowerTotalUses[power.Id] = fighter.PowerTotalUses.GetValueOrDefault(power.Id) + 1;
             if (power.Cooldown > 0)
             {
                 // +1 porque o próximo começo de turno já desconta um.
@@ -130,7 +146,7 @@ public sealed partial class TableHub
         if (fighter is not null)
         {
             combat!.LastEvent = new CombatEvent("power", fighter.Id, null, total) { AbilityName = power.Name };
-            Advance(combat, room);
+            EndAction(combat, room);
         }
         return (total, power.Area == "area" ? null : targets[0].Id, power.Name, power.RecoverStat);
     }

@@ -24,6 +24,8 @@ vez, você escolhe o alvo, o tipo do ataque e um status (se quiser) e rola o ata
 faixa de combate diz o que fazer em cada passo. 20 natural é crítico; 20 na defesa dá
 contra-ataque. As habilidades da ficha aparecem no rolador.
 O mestre tem a aba "Escudo": testes às cegas, trilha ambiente, chefes prontos e notas secretas.
+Chefes prontos têm arma, perícias, habilidades e várias ações por turno, e podem lutar
+sozinhos (combate automático), que o mestre liga e desliga quando quiser.
 
 Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como
 mudar textos, cores e limites das salas, leia docs\COMO-FUNCIONA.md.

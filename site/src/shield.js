@@ -4,6 +4,7 @@
 import { t, errorText } from './i18n.js';
 import { api, currentAccount, onAccountChange } from './account.js';
 import { SKILLS } from './sheet.js';
+import { STATUS_ICONS } from './combat.js';
 import { AMBIENT_SCENES } from './ambient.js';
 
 function el(tag, props = {}, ...children) {
@@ -67,10 +68,14 @@ export function initShield({ manager }) {
     render();
   }
 
-  async function saveBosses(next) {
+  async function saveBosses(next, changedId = '') {
     try {
       bosses = await api('/api/account/bosses', { method: 'PUT', body: next });
       bossFeedback = '';
+      // Chefe editado que já está no combate: atualiza na mesa (sem mexer na vida e na EA atuais).
+      if (changedId && combatActive) {
+        await manager.invoke('RefreshBoss', changedId).catch(() => {});
+      }
     } catch (error) {
       bossFeedback = errorText(error, 'combat.failed');
     }
@@ -150,6 +155,7 @@ export function initShield({ manager }) {
           await manager.invoke('AddBoss', {
             name: boss.name, hp: boss.hp, reflexBonus: boss.reflexBonus,
             resistPhysical: boss.resistPhysical, resistMagic: boss.resistMagic, resistPierce: boss.resistPierce,
+            templateId: boss.id,
           });
           bossFeedback = t('shield.bossAdded', { name: boss.name });
         } catch (error) {
@@ -159,7 +165,7 @@ export function initShield({ manager }) {
       });
       const edit = el('button', { class: 'text-button', type: 'button', text: t('notes.edit') });
       edit.addEventListener('click', () => {
-        editing = { ...boss };
+        editing = { ...boss, skills: { ...(boss.skills || {}) }, powers: (boss.powers || []).map((power) => ({ ...power })) };
         render();
       });
       const remove = el('button', { class: `text-button note-delete${armedBoss === boss.id ? ' is-armed' : ''}`, type: 'button', text: t(armedBoss === boss.id ? 'notes.confirmDelete' : 'notes.delete') });
@@ -174,13 +180,19 @@ export function initShield({ manager }) {
       });
       const stats = `${t('combat.bossHp')} ${boss.hp} · ${t('combat.bossReflex')} ${boss.reflexBonus >= 0 ? '+' : ''}${boss.reflexBonus}`
         + ` · ${t('resist.physical')} ${boss.resistPhysical} · ${t('resist.magic')} ${boss.resistMagic} · ${t('resist.pierce')} ${boss.resistPierce}`;
+      const combatInfo = [
+        boss.weaponName || boss.weaponDamage ? `⚔ ${boss.weaponName || t('boss.weapon')} ${boss.weaponDamage}` : '',
+        boss.ea ? `${t('boss.ea')} ${boss.ea}` : '',
+        (boss.actions || 1) > 1 ? t('boss.actionsCount', { count: boss.actions }) : '',
+        boss.powers?.length ? t('boss.powersCount', { count: boss.powers.length }) : '',
+      ].filter(Boolean).join(' · ');
       list.append(el('li', { class: 'boss-card' },
-        el('div', { class: 'boss-info' }, el('strong', { text: boss.name }), el('small', { text: stats }), boss.note ? el('p', { text: boss.note }) : null),
+        el('div', { class: 'boss-info' }, el('strong', { text: boss.name }), el('small', { text: stats }), combatInfo ? el('small', { text: combatInfo }) : null, boss.note ? el('p', { text: boss.note }) : null),
         el('div', { class: 'boss-actions' }, put, edit, remove)));
     }
     const add = el('button', { class: 'room-button', type: 'button', text: t('shield.bossNew') });
     add.addEventListener('click', () => {
-      editing = { name: '', hp: 100, reflexBonus: 0, resistPhysical: 0, resistMagic: 0, resistPierce: 0, note: '' };
+      editing = { name: '', hp: 100, ea: 0, actions: 1, reflexBonus: 0, resistPhysical: 0, resistMagic: 0, resistPierce: 0, weaponName: '', weaponDamage: 0, weaponType: 'physical', skills: {}, powers: [], note: '' };
       render();
     });
     return section('shield.bossesTitle',
@@ -190,17 +202,100 @@ export function initShield({ manager }) {
   }
 
   function bossForm() {
+    editing.skills ||= {};
+    editing.powers ||= [];
     const field = (key, type, value, attributes = {}) => {
       const input = el('input', { type, value: String(value ?? ''), ...attributes });
       return { input, label: el('label', { class: 'sheet-field' }, el('span', { text: t(key) }), input) };
     };
+    const choose = (options, value, label) => el('select', { 'aria-label': label },
+      ...options.map(([id, text]) => el('option', { value: id, text, selected: id === value })));
     const name = field('combat.bossName', 'text', editing.name, { maxLength: 30 });
     const hp = field('combat.bossHp', 'number', editing.hp, { min: 1, max: 9999 });
+    const ea = field('boss.ea', 'number', editing.ea ?? 0, { min: 0, max: 9999 });
+    const actions = field('boss.actions', 'number', editing.actions ?? 1, { min: 1, max: 5 });
     const reflex = field('combat.bossReflex', 'number', editing.reflexBonus, { min: -99, max: 99 });
     const physical = field('resist.physical', 'number', editing.resistPhysical, { min: 0, max: 999 });
     const magic = field('resist.magic', 'number', editing.resistMagic, { min: 0, max: 999 });
     const pierce = field('resist.pierce', 'number', editing.resistPierce, { min: 0, max: 999 });
+    // Arma principal: o ataque básico do chefe, com dano fixo.
+    const weaponName = field('boss.weaponName', 'text', editing.weaponName || '', { maxLength: 30, placeholder: t('boss.weaponPlaceholder') });
+    const weaponDamage = field('boss.weaponDamage', 'number', editing.weaponDamage ?? 0, { min: 0, max: 9999 });
+    const weaponType = choose(['physical', 'magic', 'pierce'].map((id) => [id, t(`kind.${id}`)]), editing.weaponType || 'physical', t('boss.weaponType'));
     const note = el('textarea', { maxLength: 300, rows: 2, value: editing.note || '', placeholder: t('shield.bossNote'), 'aria-label': t('shield.bossNote') });
+
+    // Perícias do chefe: bônus no teste de ataque (luta, pontaria, magia...) e outros.
+    const skillsBox = el('div', { class: 'boss-skills' });
+    const drawSkills = () => {
+      skillsBox.replaceChildren(...Object.entries(editing.skills).map(([id, value]) => {
+        const input = el('input', { type: 'number', min: -99, max: 99, value: String(value), 'aria-label': t(`skill.${id}`) });
+        input.addEventListener('input', () => { editing.skills[id] = Number.parseInt(input.value, 10) || 0; });
+        const remove = el('button', { class: 'text-button', type: 'button', text: '×', 'aria-label': t('sheet.removeItem') });
+        remove.addEventListener('click', () => { delete editing.skills[id]; drawSkills(); });
+        return el('span', { class: 'boss-skill' }, el('span', { text: t(`skill.${id}`) }), input, remove);
+      }));
+      const free = SKILLS.filter(([id]) => !(id in editing.skills));
+      if (free.length && Object.keys(editing.skills).length < 12) {
+        const add = choose([['', t('boss.addSkill')], ...free.map(([id]) => [id, t(`skill.${id}`)])], '', t('boss.addSkill'));
+        add.addEventListener('change', () => {
+          if (add.value) {
+            editing.skills[add.value] = 0;
+            drawSkills();
+          }
+        });
+        skillsBox.append(add);
+      }
+    };
+    drawSkills();
+
+    // Habilidades do chefe: como as dos jogadores, mais o máximo de usos no combate.
+    const powersBox = el('div', { class: 'power-list' });
+    const drawPowers = () => {
+      powersBox.replaceChildren(...editing.powers.map((power, index) => {
+        const set = (key, parse = (value) => value) => (event) => { power[key] = parse(event.target.value); };
+        const number = (key, min, max, labelKey) => {
+          const input = el('input', { type: 'number', min, max, value: String(power[key] ?? 0) });
+          input.addEventListener('input', set(key, (value) => Number.parseInt(value, 10) || 0));
+          return el('label', { class: 'power-field' }, el('span', { text: t(labelKey) }), input);
+        };
+        const kind = choose(['physical', 'magic', 'pierce', 'recovery'].map((id) => [id, t(`power.kind.${id}`)]), power.kind, t('power.kind'));
+        kind.addEventListener('change', () => { power.kind = kind.value; drawPowers(); });
+        const pname = el('input', { type: 'text', maxLength: 30, value: power.name || '', placeholder: t('power.name'), 'aria-label': t('power.name') });
+        pname.addEventListener('input', set('name'));
+        const notation = el('input', { type: 'text', maxLength: 60, value: power.notation || '', placeholder: '2d8+4', 'aria-label': t('power.notation') });
+        notation.addEventListener('input', set('notation', (value) => value.replace(/\s+/g, '')));
+        const remove = el('button', { class: 'text-button', type: 'button', text: '×', 'aria-label': t('sheet.removeItem') });
+        remove.addEventListener('click', () => { editing.powers.splice(index, 1); drawPowers(); });
+        const extra = [number('eaCost', 0, 9999, 'power.ea'), number('usesPerTurn', 0, 10, 'power.uses'),
+          number('cooldown', 0, 20, 'power.cooldown'), number('maxUses', 0, 99, 'boss.maxUses')];
+        if (power.kind === 'recovery') {
+          const stat = choose([['hp', t('kind.hp')], ['ea', t('kind.ea')]], power.recoverStat || 'hp', t('power.recover'));
+          stat.addEventListener('change', set('recoverStat'));
+          extra.unshift(el('label', { class: 'power-field' }, el('span', { text: t('power.recover') }), stat));
+        } else {
+          const skill = choose(SKILLS.map(([id]) => [id, t(`skill.${id}`)]), power.skill || 'luta', t('power.skill'));
+          skill.addEventListener('change', set('skill'));
+          const status = choose([['', t('power.noStatus')], ...Object.keys(STATUS_ICONS).map((id) => [id, `${STATUS_ICONS[id]} ${t(`status.${id}`)}`])],
+            power.statusId || '', t('power.status'));
+          status.addEventListener('change', set('statusId', (value) => value || null));
+          extra.unshift(el('label', { class: 'power-field' }, el('span', { text: t('power.skill') }), skill));
+          extra.push(el('label', { class: 'power-field' }, el('span', { text: t('power.status') }), status));
+        }
+        return el('div', { class: 'power-card', 'data-kind': power.kind },
+          el('div', { class: 'power-row' }, pname, kind, notation, remove),
+          el('div', { class: 'power-row power-details' }, ...extra));
+      }));
+    };
+    drawPowers();
+    const addPower = el('button', { class: 'room-button', type: 'button', text: t('power.add') });
+    addPower.addEventListener('click', () => {
+      if (editing.powers.length < 12) {
+        editing.powers.push({ id: crypto.randomUUID().replaceAll('-', ''), name: '', kind: 'physical', notation: '', skill: 'luta',
+          eaCost: 0, usesPerTurn: 0, cooldown: 0, maxUses: 0, statusId: null, recoverStat: 'hp', area: 'single' });
+        drawPowers();
+      }
+    });
+
     const save = el('button', { class: 'room-button room-button-primary', type: 'submit', text: t('room.save') });
     const cancel = el('button', { class: 'room-button', type: 'button', text: t('shortcut.cancel') });
     cancel.addEventListener('click', () => {
@@ -208,7 +303,13 @@ export function initShield({ manager }) {
       render();
     });
     const form = el('form', { class: 'boss-form' },
-      el('div', { class: 'boss-form-grid' }, name.label, hp.label, reflex.label, physical.label, magic.label, pierce.label), note,
+      el('div', { class: 'boss-form-grid' }, name.label, hp.label, ea.label, actions.label, reflex.label, physical.label, magic.label, pierce.label),
+      el('span', { class: 'field-label', text: t('boss.weapon') }),
+      el('div', { class: 'boss-form-grid' }, weaponName.label, weaponDamage.label,
+        el('label', { class: 'sheet-field' }, el('span', { text: t('boss.weaponType') }), weaponType)),
+      el('span', { class: 'field-label', text: t('boss.skills') }), skillsBox,
+      el('span', { class: 'field-label', text: t('power.title') }), powersBox, addPower,
+      note,
       el('div', { class: 'note-form-actions' }, cancel, save));
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -225,11 +326,19 @@ export function initShield({ manager }) {
         resistPhysical: number(physical.input),
         resistMagic: number(magic.input),
         resistPierce: number(pierce.input),
+        ea: Math.max(0, number(ea.input)),
+        actions: Math.min(5, Math.max(1, number(actions.input))),
+        weaponName: weaponName.input.value.trim(),
+        weaponDamage: Math.max(0, number(weaponDamage.input)),
+        weaponType: weaponType.value,
+        skills: { ...editing.skills },
+        powers: editing.powers.filter((power) => (power.name || '').trim() && (power.notation || '').trim()),
         note: note.value.trim(),
       };
       const next = editing.id ? bosses.map((boss) => (boss.id === editing.id ? updated : boss)) : [...bosses, updated];
+      const changedId = editing.id || '';
       editing = null;
-      saveBosses(next);
+      saveBosses(next, changedId);
     });
     return form;
   }

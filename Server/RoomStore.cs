@@ -94,6 +94,15 @@ public sealed class BossTemplate
     public int ResistMagic { get; set; }
     public int ResistPierce { get; set; }
     public string Note { get; set; } = string.Empty;
+    // Combate: EA, ações por turno, arma principal (ataque básico com dano fixo),
+    // perícias com bônus e habilidades (com máximo de usos no combate).
+    public int Ea { get; set; }
+    public int Actions { get; set; } = 1;
+    public string WeaponName { get; set; } = string.Empty;
+    public int WeaponDamage { get; set; }
+    public string WeaponType { get; set; } = "physical";
+    public Dictionary<string, int> Skills { get; set; } = new();
+    public List<Power> Powers { get; set; } = new();
 
     public static List<BossTemplate> Normalize(List<BossTemplate>? bosses) =>
         (bosses ?? new()).Where(boss => boss is not null).Take(60).Select(boss => new BossTemplate
@@ -106,6 +115,20 @@ public sealed class BossTemplate
             ResistMagic = Math.Clamp(boss.ResistMagic, 0, 999),
             ResistPierce = Math.Clamp(boss.ResistPierce, 0, 999),
             Note = Sheet.Clean(boss.Note, 300),
+            Ea = Math.Clamp(boss.Ea, 0, Sheet.MaxStatus),
+            Actions = Math.Clamp(boss.Actions, 1, 5),
+            WeaponName = Sheet.Clean(boss.WeaponName, 30),
+            WeaponDamage = Math.Clamp(boss.WeaponDamage, 0, Sheet.MaxStatus),
+            WeaponType = Power.Kinds.Contains(boss.WeaponType) && boss.WeaponType != "recovery" ? boss.WeaponType : "physical",
+            Skills = (boss.Skills ?? new())
+                .Where(pair => Sheet.SkillList.Any(skill => skill.Id == pair.Key))
+                .Take(12)
+                .ToDictionary(pair => pair.Key, pair => Math.Clamp(pair.Value, -99, 99)),
+            Powers = (boss.Powers ?? new()).Where(power => power is not null).Take(12)
+                .Select(power => power.Normalized())
+                .Where(power => power.Name.Length > 0 && power.Notation.Length > 0)
+                .GroupBy(power => power.Id).Select(group => group.First())
+                .ToList(),
         }).Where(boss => boss.Name.Length > 0).ToList();
 }
 

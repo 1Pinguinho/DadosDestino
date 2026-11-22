@@ -526,7 +526,7 @@ public sealed partial class TableHub : Hub
         int? applied = null;
         var combatChanged = false;
         (string[] Full, bool PlayerSees)? blindRecipients = null;
-        CombatView? combatView = null;
+        (CombatView? Public, CombatView? Master, string? MasterConnection) combatView = default;
         lock (RoomsLock)
         {
             if (!Rooms.TryGetValue(code, out var room)
@@ -609,7 +609,7 @@ public sealed partial class TableHub : Hub
                 powerLabel = used.Label;
                 if (room.Combat is { Phase: "turns" })
                 {
-                    combatView = ViewOf(room);
+                    combatView = CombatViews(room);
                     combatChanged = true;
                 }
             }
@@ -631,7 +631,7 @@ public sealed partial class TableHub : Hub
 
             if (ApplyCombatRoll(room, actor, roll, kind, changedAccounts))
             {
-                combatView = ViewOf(room);
+                combatView = CombatViews(room);
                 combatChanged = true;
             }
             if (room.Combat is { } activeCombat)
@@ -703,7 +703,7 @@ public sealed partial class TableHub : Hub
         }
         if (combatChanged)
         {
-            await Clients.Group(code).SendAsync("CombatUpdated", combatView);
+            await SendCombat(hubContext.Clients, code, combatView);
         }
     }
 
@@ -1067,7 +1067,7 @@ public sealed partial class TableHub : Hub
             room.Chat.ToArray(),
             room.Notes.ToArray(),
             room.OwnerAccountId is not null,
-            ViewOf(room),
+            ViewOf(room, viewer.IsMaster),
             room.BlindRequests.Where(pair => pair.Value.PlayerId == viewer.Id).Select(pair => pair.Value.View(pair.Key)).ToArray(),
             room.Ambient);
     }

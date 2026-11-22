@@ -54,6 +54,17 @@ public sealed partial class TableHub
         {
             throw new HubException("TOO_MANY_FIGHTERS");
         }
+        // Chefe pronto: vem inteiro do Escudo do mestre (arma, perícias, habilidades, EA).
+        if (request.TemplateId is { Length: > 0 } templateId && MasterTemplate(room, templateId) is { } template)
+        {
+            var fromTemplate = FighterFromTemplate(template);
+            combat.Fighters.Add(fromTemplate);
+            if (combat.Phase == "turns")
+            {
+                fromTemplate.Initiative = 0;
+            }
+            return;
+        }
         var name = ValidateText(request.Name, 1, 30, "INVALID_NAME");
         var boss = new Fighter
         {
@@ -252,40 +263,22 @@ public sealed partial class TableHub
                 {
                     throw new HubException("TARGET_UNAVAILABLE");
                 }
-                // Tipo do ataque e status escolhidos antes de rolar (ou os da habilidade usada).
+                // Tipo do ataque e status escolhidos antes de rolar (ou os da habilidade usada,
+                // ou a arma do chefe, que tem dano fixo).
                 var type = DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical";
                 var statusId = roll.StatusId is not null && Power.StatusIds.Contains(roll.StatusId) ? roll.StatusId : null;
-                combat.AbilityName = null;
-                combat.AbilityNotation = null;
-                if (roll.AbilityId is not null)
+                Power? power = null;
+                var weapon = current.IsBoss && roll.AbilityId == "weapon";
+                if (roll.AbilityId is not null && !weapon)
                 {
-                    var power = UsePower(room, combat, current, actor, roll.AbilityId, changedAccounts);
+                    power = UsePower(room, combat, current, actor, roll.AbilityId, changedAccounts);
                     if (!power.IsAttack)
                     {
                         throw new HubException("INVALID_ROLL");
                     }
-                    type = power.Kind;
-                    statusId = power.StatusId;
-                    combat.AbilityName = power.Name;
-                    combat.AbilityNotation = power.Notation;
                 }
                 CountNatural(current, roll);
-                combat.AttackType = type;
-                combat.PendingStatusId = statusId;
-                combat.Critical = NaturalD20(roll) == 20;
-                combat.AttackTotal = total;
-                if (type == "magic")
-                {
-                    // Magia: o alvo não rola contra. Vai direto para o dano.
-                    current.Stats.Hits++;
-                    combat.Step = "damage";
-                    combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
-                    combat.LastEvent = new CombatEvent("magicHit", current.Id, target.Id, total) { Critical = combat.Critical, AbilityName = combat.AbilityName };
-                    return true;
-                }
-                combat.Step = "reflex";
-                combat.StepEndsUtc = DateTime.UtcNow + ReactionTime;
-                combat.LastEvent = new CombatEvent("attack", current.Id, target.Id, total) { Critical = combat.Critical, AbilityName = combat.AbilityName };
+                StartAttack(room, combat, current, target, type, statusId, power, weapon, total, NaturalD20(roll));
                 return true;
             }
             case "reflex":
@@ -299,34 +292,8 @@ public sealed partial class TableHub
                 {
                     throw new HubException("NOT_YOUR_TURN");
                 }
-                var current = combat.Current!;
                 CountNatural(target, roll);
-                if (NaturalD20(roll) == 20)
-                {
-                    // Crítico na defesa: o ataque falha e o defensor contra-ataca, sem
-                    // que o atacante possa se defender.
-                    current.Stats.Misses++;
-                    combat.Critical = false;
-                    combat.PendingStatusId = null;
-                    combat.Step = "counter";
-                    combat.CounterId = target.Id;
-                    combat.StepEndsUtc = DateTime.UtcNow + ReactionTime;
-                    combat.LastEvent = new CombatEvent("counter", target.Id, current.Id, total);
-                }
-                else if (combat.Critical || combat.AttackTotal > total)
-                {
-                    // 20 natural no ataque sempre acerta (e é crítico).
-                    current.Stats.Hits++;
-                    combat.Step = "damage";
-                    combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
-                    combat.LastEvent = new CombatEvent("hit", current.Id, target.Id, total);
-                }
-                else
-                {
-                    current.Stats.Misses++;
-                    combat.LastEvent = new CombatEvent("miss", current.Id, target.Id, total);
-                    Advance(combat, room);
-                }
+                ResolveDefense(room, combat, target, total, NaturalD20(roll));
                 return true;
             }
             case "damage":
@@ -340,11 +307,7 @@ public sealed partial class TableHub
                     {
                         return false;
                     }
-                    var counterType = DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical";
-                    var counterDamage = Math.Max(0, total - ResistanceOf(room, current, counterType));
-                    DamageFighter(room, combat, current, counterDamage, counter);
-                    combat.LastEvent = new CombatEvent("counterDamage", counter.Id, current.Id, counterDamage);
-                    Advance(combat, room);
+                    ApplyCounter(room, combat, counter, DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical", total);
                     return true;
                 }
                 if (combat.Step != "damage" || current is null || !Controls(actor, current) || combat.TargetId is null)
@@ -352,21 +315,7 @@ public sealed partial class TableHub
                     // Dano fora do passo certo: só uma rolagem, sem efeito.
                     return false;
                 }
-                var target = FindFighter(combat, combat.TargetId);
-                // O tipo é o escolhido antes do ataque. Crítico: mágico ×1,3, físico e
-                // perfuração ×1,8, antes de descontar a resistência.
-                var type = combat.AttackType;
-                var dealt = combat.Critical ? (int)Math.Floor(total * (type == "magic" ? 1.3 : 1.8)) : total;
-                var damage = Math.Max(0, dealt - ResistanceOf(room, target, type));
-                DamageFighter(room, combat, target, damage, current);
-                combat.LastEvent = new CombatEvent("damage", current.Id, target.Id, damage) { Critical = combat.Critical, AbilityName = combat.AbilityName };
-                // O status escolhido no ataque entra junto com o dano.
-                if (combat.PendingStatusId is { } pending && !target.Dead)
-                {
-                    AddStatusStack(room, combat, target, pending, current.Id);
-                    combat.LastEvent = combat.LastEvent with { StatusId = pending };
-                }
-                Advance(combat, room);
+                ApplyAttackDamage(room, combat, FindFighter(combat, combat.TargetId), total);
                 return true;
             }
             case "medicine":
@@ -400,7 +349,7 @@ public sealed partial class TableHub
                 {
                     changedAccounts.Add(accountId);
                 }
-                Advance(combat, room);
+                EndAction(combat, room);
                 return true;
             }
             case "recovery":
@@ -484,6 +433,8 @@ public sealed partial class TableHub
         combat.AbilityName = null;
         combat.AbilityNotation = null;
         combat.CounterId = null;
+        combat.FixedDamage = null;
+        combat.AutoNextUtc = DateTime.UtcNow + AutoDelay;
         if (combat.Fighters.Count == 0)
         {
             combat.TurnIndex = 0;
@@ -517,6 +468,7 @@ public sealed partial class TableHub
             }
             fighter.PotionUsed = false;
             StartPowerTurn(fighter);
+            fighter.ActionsLeft = Math.Max(1, fighter.Actions);
             combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
             return;
         }
@@ -525,7 +477,7 @@ public sealed partial class TableHub
 
     private static async Task CombatTick()
     {
-        var updates = new List<(string Code, CombatView? View)>();
+        var updates = new List<(string Code, (CombatView? Public, CombatView? Master, string? MasterConnection) Views)>();
         var changed = new List<string>();
         lock (RoomsLock)
         {
@@ -533,7 +485,19 @@ public sealed partial class TableHub
             foreach (var (code, room) in Rooms)
             {
                 var combat = room.Combat;
-                if (combat is null || combat.Paused || combat.Phase != "turns" || now < combat.StepEndsUtc)
+                if (combat is null)
+                {
+                    continue;
+                }
+                // Chefes automáticos jogam sozinhos (com um respiro entre os passos).
+                if (AutoStep(room, combat, now))
+                {
+                    updates.Add((code, CombatViews(room)));
+                    changed.AddRange(combat.ChangedAccounts);
+                    combat.ChangedAccounts.Clear();
+                    continue;
+                }
+                if (combat.Paused || combat.Phase != "turns" || now < combat.StepEndsUtc)
                 {
                     continue;
                 }
@@ -541,23 +505,30 @@ public sealed partial class TableHub
                 if (combat.Step == "reflex" && current is not null && combat.TargetId is not null)
                 {
                     // O alvo não reagiu a tempo: o ataque entra.
-                    combat.Step = "damage";
-                    combat.StepEndsUtc = now + TurnTime;
                     current.Stats.Hits++;
                     combat.LastEvent = new CombatEvent("hitTimeout", current.Id, combat.TargetId, null);
+                    if (combat.FixedDamage is { } fixedDamage)
+                    {
+                        ApplyAttackDamage(room, combat, FindFighter(combat, combat.TargetId), fixedDamage);
+                    }
+                    else
+                    {
+                        combat.Step = "damage";
+                        combat.StepEndsUtc = now + TurnTime;
+                    }
                 }
                 else if (combat.Step == "counter")
                 {
                     // Quem ia contra-atacar não rolou a tempo: perde o contra-ataque.
                     combat.LastEvent = new CombatEvent("counterTimeout", combat.CounterId, current?.Id, null);
-                    Advance(combat, room);
+                    EndAction(combat, room);
                 }
                 else
                 {
                     combat.LastEvent = new CombatEvent("timeout", current?.Id, null, null);
                     Advance(combat, room);
                 }
-                updates.Add((code, ViewOf(room)));
+                updates.Add((code, CombatViews(room)));
                 changed.AddRange(combat.ChangedAccounts);
                 combat.ChangedAccounts.Clear();
             }
@@ -566,9 +537,9 @@ public sealed partial class TableHub
         {
             return;
         }
-        foreach (var (code, view) in updates)
+        foreach (var (code, views) in updates)
         {
-            await sharedHub.Clients.Group(code).SendAsync("CombatUpdated", view);
+            await SendCombat(sharedHub.Clients, code, views);
         }
         foreach (var accountId in changed.Distinct())
         {
@@ -636,7 +607,22 @@ public sealed partial class TableHub
 
     // ---------- envio ----------
 
-    private static CombatView? ViewOf(RoomState room)
+    // Visão para todos (forMaster = false) ou para o mestre (com os detalhes dos chefes).
+    private static (CombatView? Public, CombatView? Master, string? MasterConnection) CombatViews(RoomState room) =>
+        (ViewOf(room), ViewOf(room, true), room.Players.Values.FirstOrDefault(player => player.IsMaster)?.ConnectionId);
+
+    private static async Task SendCombat(IHubClients clients, string code, (CombatView? Public, CombatView? Master, string? MasterConnection) views)
+    {
+        if (views.MasterConnection is { } master)
+        {
+            await clients.Client(master).SendAsync("CombatUpdated", views.Master);
+            await clients.GroupExcept(code, new[] { master }).SendAsync("CombatUpdated", views.Public);
+            return;
+        }
+        await clients.Group(code).SendAsync("CombatUpdated", views.Public);
+    }
+
+    private static CombatView? ViewOf(RoomState room, bool forMaster = false)
     {
         var combat = room.Combat;
         if (combat is null)
@@ -675,7 +661,8 @@ public sealed partial class TableHub
                 medicine,
                 fighter.Statuses.Select(effect => new StatusView(effect.Id, effect.Stacks, effect.TurnsLeft)).ToArray(),
                 new Dictionary<string, int>(fighter.PowerUses),
-                new Dictionary<string, int>(fighter.PowerCooldowns));
+                new Dictionary<string, int>(fighter.PowerCooldowns),
+                forMaster && fighter.IsBoss ? BossDetails(fighter) : null);
         }).ToArray();
         return new CombatView(
             combat.Phase,
@@ -703,7 +690,7 @@ public sealed partial class TableHub
     private async Task MasterCombat(Action<RoomState, CombatState?> change)
     {
         var (code, playerId) = CurrentSeat();
-        CombatView? view;
+        (CombatView? Public, CombatView? Master, string? MasterConnection) views;
         string[] changed;
         lock (RoomsLock)
         {
@@ -718,11 +705,11 @@ public sealed partial class TableHub
             }
             change(room, room.Combat);
             room.LastActivityUtc = DateTime.UtcNow;
-            view = ViewOf(room);
+            views = CombatViews(room);
             changed = room.Combat?.ChangedAccounts.ToArray() ?? Array.Empty<string>();
             room.Combat?.ChangedAccounts.Clear();
         }
-        await Clients.Group(code).SendAsync("CombatUpdated", view);
+        await SendCombat(hubContext.Clients, code, views);
         foreach (var accountId in changed)
         {
             await NotifyAccountChanged(hubContext, accountId);
@@ -732,7 +719,7 @@ public sealed partial class TableHub
     private async Task TurnAction(Action<RoomState, CombatState, Fighter, PlayerState> change, bool allowMaster = false)
     {
         var (code, playerId) = CurrentSeat();
-        CombatView? view;
+        (CombatView? Public, CombatView? Master, string? MasterConnection) views;
         string[] changed;
         lock (RoomsLock)
         {
@@ -752,11 +739,11 @@ public sealed partial class TableHub
                 throw new HubException("NOT_YOUR_TURN");
             }
             change(room, combat, current, actor);
-            view = ViewOf(room);
+            views = CombatViews(room);
             changed = combat.ChangedAccounts.ToArray();
             combat.ChangedAccounts.Clear();
         }
-        await Clients.Group(code).SendAsync("CombatUpdated", view);
+        await SendCombat(hubContext.Clients, code, views);
         foreach (var accountId in changed)
         {
             await NotifyAccountChanged(hubContext, accountId);
@@ -787,6 +774,10 @@ public sealed partial class TableHub
         public string? AbilityName { get; set; }
         public string? AbilityNotation { get; set; }
         public string? CounterId { get; set; }
+        // Ataque com a arma do chefe: dano fixo, sem rolagem.
+        public int? FixedDamage { get; set; }
+        // Chefe automático: quando ele faz o próximo passo (dá tempo de todos acompanharem).
+        public DateTime AutoNextUtc { get; set; }
         public HashSet<string> ChangedAccounts { get; } = new(StringComparer.Ordinal);
         public Fighter? Current => TurnIndex >= 0 && TurnIndex < Fighters.Count ? Fighters[TurnIndex] : null;
     }
@@ -795,13 +786,28 @@ public sealed partial class TableHub
     {
         public string Id { get; init; } = string.Empty;
         public string? PlayerId { get; init; }
-        public string Name { get; init; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
         public bool IsBoss { get; init; }
         public int? Initiative { get; set; }
         public int Hp { get; set; }
-        public int HpMax { get; init; }
-        public int ReflexBonus { get; init; }
-        public Resistances Resist { get; init; } = new();
+        public int HpMax { get; set; }
+        public int ReflexBonus { get; set; }
+        public Resistances Resist { get; set; } = new();
+        // Chefe: modelo de origem (para editar ao vivo), EA, ações por turno, arma,
+        // perícias, habilidades e o modo automático.
+        public string? TemplateId { get; init; }
+        public int Ea { get; set; }
+        public int EaMax { get; set; }
+        public int Actions { get; set; } = 1;
+        public int ActionsLeft { get; set; } = 1;
+        public string WeaponName { get; set; } = string.Empty;
+        public int WeaponDamage { get; set; }
+        public string WeaponType { get; set; } = "physical";
+        public Dictionary<string, int> Skills { get; set; } = new(StringComparer.Ordinal);
+        public List<Power> Powers { get; set; } = new();
+        public Dictionary<string, int> PowerTotalUses { get; } = new(StringComparer.Ordinal);
+        public bool Auto { get; set; }
+        public string Targeting { get; set; } = "random";
         public bool PotionUsed { get; set; }
         public int Chances { get; set; } = 3;
         public bool LastChance { get; set; }
@@ -817,7 +823,7 @@ public sealed partial class TableHub
     }
 }
 
-public sealed record BossRequest(string Name, int Hp, int ReflexBonus, int ResistPhysical, int ResistMagic, int ResistPierce);
+public sealed record BossRequest(string Name, int Hp, int ReflexBonus, int ResistPhysical, int ResistMagic, int ResistPierce, string? TemplateId = null);
 
 // O que aconteceu por último (para o site mostrar uma frase curta).
 // Type: start, initiative, attack, hit, hitTimeout, miss, damage, passed, timeout,
@@ -832,7 +838,7 @@ public sealed record CombatEvent(string Type, string? ActorId, string? TargetId,
 
 public sealed record FighterView(string Id, string? PlayerId, string Name, bool IsBoss, int? Initiative, int Hp, int HpMax,
     bool Down, bool Defeated, int Chances, bool LastChance, bool Dead, int? Dt, bool PotionUsed, int Reflex, int Medicine,
-    IReadOnlyList<StatusView> Statuses, IReadOnlyDictionary<string, int> PowerUses, IReadOnlyDictionary<string, int> PowerCooldowns);
+    IReadOnlyList<StatusView> Statuses, IReadOnlyDictionary<string, int> PowerUses, IReadOnlyDictionary<string, int> PowerCooldowns, BossView? Boss);
 
 // Deadline: quando acaba o tempo do passo atual (ms desde 1970).
 public sealed record CombatView(string Phase, bool Paused, int Round, string? CurrentId, string Step, string? TargetId, int AttackTotal,

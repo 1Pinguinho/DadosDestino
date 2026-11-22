@@ -210,7 +210,7 @@ public sealed partial class TableHub
     private async Task CombatAction(Action<RoomState, CombatState, PlayerState> change)
     {
         var (code, playerId) = CurrentSeat();
-        CombatView? view;
+        (CombatView? Public, CombatView? Master, string? MasterConnection) views;
         string[] changed;
         lock (RoomsLock)
         {
@@ -221,11 +221,11 @@ public sealed partial class TableHub
             }
             var combat = room.Combat ?? throw new HubException("NO_COMBAT");
             change(room, combat, actor);
-            view = ViewOf(room);
+            views = CombatViews(room);
             changed = combat.ChangedAccounts.ToArray();
             combat.ChangedAccounts.Clear();
         }
-        await Clients.Group(code).SendAsync("CombatUpdated", view);
+        await SendCombat(hubContext.Clients, code, views);
         foreach (var accountId in changed)
         {
             await NotifyAccountChanged(hubContext, accountId);
