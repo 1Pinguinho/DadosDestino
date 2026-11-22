@@ -80,6 +80,9 @@ public sealed class SavedRoom
     public List<RoomNote> Notes { get; set; } = new();
     // Notas secretas do mestre (aba Escudo): nunca vão para os jogadores.
     public string MasterNotes { get; set; } = string.Empty;
+    // Sistema de ficha da mesa (e o modelo, se for personalizado).
+    public string System { get; set; } = "abismo";
+    public CustomSystem? CustomSystem { get; set; }
     public DateTime UpdatedUtc { get; set; }
 }
 

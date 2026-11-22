@@ -96,7 +96,7 @@ public sealed partial class TableHub
     }
 
     // Trilha ambiente da mesa ("" = silêncio). Cada pessoa controla o próprio volume.
-    private static readonly string[] AmbientScenes = { "", "rain", "fire", "wind", "tavern", "tension" };
+    private static readonly string[] AmbientScenes = { "", "rain", "storm", "wind", "fire" };
 
     public async Task SetAmbient(string scene)
     {

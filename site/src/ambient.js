@@ -1,9 +1,13 @@
-// Trilha ambiente: sons gerados na hora pelo próprio app (sem arquivos de áudio),
-// tocando em ciclo. O mestre escolhe a cena e todos ouvem; cada pessoa tem o próprio
-// liga/desliga e volume (configurações). Cenas: chuva, fogueira, vento, taverna, tensão.
+// Trilha ambiente, tocando em ciclo. O mestre escolhe a cena e todos ouvem; cada pessoa
+// tem o próprio liga/desliga e volume (configurações). Cenas: chuva, chuva com trovões,
+// vento e fogueira. A fogueira usa a gravação em site/audio/fogueira.ogg quando ela
+// existe; sem o arquivo, é gerada na hora como as outras.
 import { getSettings } from './settings.js';
 
-export const AMBIENT_SCENES = ['rain', 'fire', 'wind', 'tavern', 'tension'];
+export const AMBIENT_SCENES = ['rain', 'storm', 'wind', 'fire'];
+const FIRE_RECORDING = '/audio/fogueira.ogg';
+let fireBuffer = null; // AudioBuffer, ou false se não existe
+let fireLoading = null;
 
 let context = null;
 let output = null;
@@ -101,18 +105,21 @@ function burst(ctx, destination, { frequency, type = 'bandpass', q = 1, peak, du
   source.start();
 }
 
-function ping(ctx, destination, frequency, peak, duration) {
-  const oscillator = ctx.createOscillator();
-  const envelope = gain(ctx, 0.0001);
-  const now = ctx.currentTime;
-  oscillator.type = 'sine';
-  oscillator.frequency.value = frequency;
-  envelope.gain.setValueAtTime(0.0001, now);
-  envelope.gain.exponentialRampToValueAtTime(peak, now + 0.005);
-  envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  oscillator.connect(envelope).connect(destination);
-  oscillator.start(now);
-  oscillator.stop(now + duration + 0.05);
+// Trovão: ronco grave de ruído marrom que cresce rápido e some devagar.
+function thunder(ctx, destination, peak) {
+  const length = Math.floor(ctx.sampleRate * (2.5 + Math.random() * 2));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let index = 0; index < length; index += 1) {
+    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+    const attack = Math.min(1, index / (ctx.sampleRate * 0.25));
+    data[index] = last * 3.5 * attack * (1 - index / length) ** 1.6;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(filter(ctx, 'lowpass', 180 + Math.random() * 120)).connect(gain(ctx, peak * 2.2)).connect(destination);
+  source.start();
 }
 
 // Repete uma ação em intervalos aleatórios enquanto a cena toca.
@@ -137,7 +144,28 @@ const BUILDERS = {
     nodes.push(hiss, rumble);
     every(timers, 25, 110, () => burst(ctx, bus, { frequency: 2500 + Math.random() * 3500, q: 2, peak: 0.05 + Math.random() * 0.12, duration: 0.02 }));
   },
+  // Chuva com trovões: a mesma chuva e, de tempos em tempos, um estalo e um ronco grave.
+  storm(ctx, bus, nodes, timers) {
+    BUILDERS.rain(ctx, bus, nodes, timers);
+    every(timers, 9000, 22000, () => {
+      const near = Math.random() < 0.4;
+      if (near) {
+        burst(ctx, bus, { frequency: 3000, type: 'highpass', peak: 0.35, duration: 0.12 });
+      }
+      setTimeout(() => thunder(ctx, bus, near ? 0.9 : 0.55), near ? 120 : 600 + Math.random() * 900);
+    });
+  },
   fire(ctx, bus, nodes, timers) {
+    // Gravação real, se o arquivo veio no pacote.
+    if (fireBuffer) {
+      const recording = ctx.createBufferSource();
+      recording.buffer = fireBuffer;
+      recording.loop = true;
+      recording.connect(gain(ctx, 1.4)).connect(bus);
+      recording.start(0, Math.random() * Math.max(0, fireBuffer.duration - 1));
+      nodes.push(recording);
+      return;
+    }
     const roar = noise(ctx, 'brown');
     const roarGain = gain(ctx, 0.5);
     roar.connect(filter(ctx, 'lowpass', 520)).connect(roarGain).connect(bus);
@@ -152,40 +180,6 @@ const BUILDERS = {
     air.connect(band).connect(airGain).connect(bus);
     air.start();
     nodes.push(air, lfo(ctx, 0.07, 380, band.frequency), lfo(ctx, 0.11, 0.3, airGain.gain));
-  },
-  tavern(ctx, bus, nodes, timers) {
-    const crowd = noise(ctx, 'pink');
-    const voices = filter(ctx, 'bandpass', 420, 0.8);
-    const crowdGain = gain(ctx, 0.32);
-    crowd.connect(voices).connect(crowdGain).connect(bus);
-    crowd.start();
-    nodes.push(crowd, lfo(ctx, 0.35, 0.1, crowdGain.gain), lfo(ctx, 0.23, 120, voices.frequency));
-    // Canecas batendo de vez em quando.
-    every(timers, 1800, 6000, () => {
-      ping(ctx, bus, 2200 + Math.random() * 900, 0.05, 0.25);
-      if (Math.random() < 0.5) {
-        setTimeout(() => ping(ctx, bus, 2600 + Math.random() * 700, 0.04, 0.2), 70);
-      }
-    });
-  },
-  tension(ctx, bus, nodes, timers) {
-    const drone = gain(ctx, 0.16);
-    const tone = filter(ctx, 'lowpass', 320, 1.2);
-    tone.connect(drone).connect(bus);
-    for (const [frequency, type] of [[55, 'sawtooth'], [55.6, 'sawtooth'], [82.4, 'sine']]) {
-      const oscillator = ctx.createOscillator();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      oscillator.connect(tone);
-      oscillator.start();
-      nodes.push(oscillator);
-    }
-    nodes.push(lfo(ctx, 0.05, 140, tone.frequency));
-    // Batidas de coração, graves e espaçadas.
-    every(timers, 1400, 2200, () => {
-      ping(ctx, bus, 58, 0.35, 0.22);
-      setTimeout(() => ping(ctx, bus, 52, 0.25, 0.2), 230);
-    });
   },
 };
 
@@ -215,12 +209,26 @@ function stop(fadeSeconds = 1.2) {
   }, fadeSeconds * 1000 + 100);
 }
 
+// Carrega a gravação da fogueira uma vez (sem ela, a fogueira é gerada na hora).
+function loadFire(ctx) {
+  fireLoading ||= fetch(FIRE_RECORDING)
+    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error('missing'))))
+    .then((data) => ctx.decodeAudioData(data))
+    .then((buffer) => { fireBuffer = buffer; })
+    .catch(() => { fireBuffer = false; });
+  return fireLoading;
+}
+
 function start() {
   if (!scene || !getSettings().ambient) {
     return;
   }
   const ctx = audio();
   if (!ctx || ctx.state !== 'running' || playing) {
+    return;
+  }
+  if (scene === 'fire' && fireBuffer === null) {
+    loadFire(ctx).then(() => start());
     return;
   }
   const bus = gain(ctx, 0);

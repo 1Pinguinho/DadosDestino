@@ -284,6 +284,9 @@
                   </div>
                 </div>
               </div>
+              <label class="room-field" for="create-system"><span data-i18n="create.system">SISTEMA DA FICHA</span>
+                <select id="create-system" class="system-select"></select>
+              </label>
               <p id="visibility-hint" class="field-hint" data-i18n="create.publicHint">Aparece na busca de salas deste servidor.</p>
               <label class="check-row" for="allow-spectators">
                 <input id="allow-spectators" type="checkbox" checked />
@@ -503,6 +506,7 @@
               <ul id="spectator-list" class="player-list spectator-list"></ul>
             </div>
 
+            <p id="room-system-line" class="room-system-line"></p>
             <details id="room-settings" class="room-settings" hidden>
               <summary data-i18n="room.settings">CONFIGURAR SALA</summary>
               <form id="room-settings-form">
@@ -519,6 +523,9 @@
                   <button type="button" data-public="true" aria-pressed="true"><svg class="icon"><use href="#i-globe" /></svg><span data-i18n="create.public">Pública</span></button>
                   <button type="button" data-public="false" aria-pressed="false"><svg class="icon"><use href="#i-lock" /></svg><span data-i18n="create.private">Privada</span></button>
                 </div>
+                <label class="room-field" for="settings-system"><span data-i18n="create.system">SISTEMA DA FICHA</span>
+                  <select id="settings-system" class="system-select"></select>
+                </label>
                 <label class="check-row" for="settings-spectators">
                   <input id="settings-spectators" type="checkbox" />
                   <span><strong data-i18n="create.spectators">Permitir espectadores</strong></span>

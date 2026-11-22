@@ -72,7 +72,9 @@ public sealed record RoomRoster(
     bool AllowSpectators,
     int MaxSpectators,
     IReadOnlyList<RoomPlayer> Players,
-    IReadOnlyList<RoomSpectator> Spectators);
+    IReadOnlyList<RoomSpectator> Spectators,
+    string System = "abismo",
+    CustomSystem? CustomSystem = null);
 
 public sealed record RoomSnapshot(
     string Code,
@@ -93,7 +95,9 @@ public sealed record RoomSnapshot(
     bool IsSaved,
     CombatView? Combat,
     IReadOnlyList<BlindRequestView> BlindRequests,
-    string Ambient);
+    string Ambient,
+    string System = "abismo",
+    CustomSystem? CustomSystem = null);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
 // Summary: o resumo do combate (mensagem automática ao encerrar).

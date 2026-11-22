@@ -104,6 +104,29 @@ public static class AccountEndpoints
             return bosses is null ? Error("INVALID_REQUEST") : Results.Json(store.SaveBosses(account.Id, bosses), AccountStore.Json);
         });
 
+        // Sistemas personalizados do mestre (fora das mesas também).
+        app.MapGet("/api/account/systems", (HttpContext context) =>
+            store.Resolve(Token(context)) is { } account ? Results.Json(store.Systems(account.Id), AccountStore.Json) : Unauthorized());
+
+        app.MapPut("/api/account/systems", async (HttpContext context) =>
+        {
+            if (store.Resolve(Token(context)) is not { } account)
+            {
+                return Unauthorized();
+            }
+            var body = await ReadBody(context, 128 * 1024);
+            List<CustomSystem>? systems;
+            try
+            {
+                systems = body is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<CustomSystem>>(body, AccountStore.Json);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                systems = null;
+            }
+            return systems is null ? Error("INVALID_REQUEST") : Results.Json(store.SaveSystems(account.Id, systems), AccountStore.Json);
+        });
+
         // Muda HP, EA ou San atual na mão (ex.: "Recuperei 10 de HP" ou corrigir um valor).
         app.MapPost("/api/account/status", async (StatusRequest request, HttpContext context) =>
         {
@@ -111,7 +134,7 @@ public static class AccountEndpoints
             {
                 return Unauthorized();
             }
-            if (request.Stat is not ("hp" or "ea" or "san") || request.SheetId is null)
+            if (request.Stat is not ("hp" or "ea" or "san" or "vig") || request.SheetId is null)
             {
                 return Error("INVALID_REQUEST");
             }

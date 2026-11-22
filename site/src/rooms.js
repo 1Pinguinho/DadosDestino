@@ -3,7 +3,8 @@
 // da sala e o link de convite do anfitrião.
 import { t, errorText } from './i18n.js';
 import { getSettings } from './settings.js';
-import { currentAccount, onAccountChange, sessionToken } from './account.js';
+import { api, currentAccount, onAccountChange, sessionToken } from './account.js';
+import { BUILT_IN_SYSTEMS, systemName } from './systems.js';
 
 const $ = (selector) => document.querySelector(selector);
 const nameInput = $('#player-name');
@@ -252,6 +253,33 @@ function lockLobby(locked) {
   }
 }
 
+// ---------- sistema da ficha na mesa ----------
+// Prontos (Abismo, Ordem Paranormal, D&D 5e, Tormenta20) e os personalizados da conta.
+let customSystems = [];
+async function loadCustomSystems() {
+  customSystems = currentAccount() ? await api('/api/account/systems').catch(() => []) : [];
+  fillSystemSelect($('#create-system'), $('#create-system').value || 'abismo');
+}
+
+function fillSystemSelect(select, value) {
+  select.replaceChildren(
+    ...['abismo', ...Object.keys(BUILT_IN_SYSTEMS)].map((id) => new Option(systemName(id), id)),
+    ...customSystems.map((custom) => new Option(`${custom.name} (${t('system.custom')})`, `custom:${custom.id}`)));
+  select.value = [...select.options].some((option) => option.value === value) ? value : 'abismo';
+}
+
+const systemValue = (room) => (room?.system === 'custom' ? `custom:${room.customSystem?.id}` : room?.system || 'abismo');
+
+async function applySystem(choice) {
+  const [system, customId] = choice.split(':');
+  await connection.invoke('SetRoomSystem', system, customId || null);
+}
+
+onAccountChange(loadCustomSystems);
+$('#tab-create').addEventListener('click', loadCustomSystems);
+loadCustomSystems();
+window.addEventListener('languagechange-app', () => fillSystemSelect($('#create-system'), $('#create-system').value));
+
 $('#panel-create').addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
@@ -272,6 +300,10 @@ $('#panel-create').addEventListener('submit', async (event) => {
       color: getSettings().seatColor,
     });
     enteredRoom(result, false);
+    const chosenSystem = $('#create-system').value;
+    if (chosenSystem && chosenSystem !== 'abismo') {
+      await applySystem(chosenSystem).catch((error) => sayError(roomFeedback, error, 'room.joinFailed'));
+    }
   } catch (error) {
     sayError(lobbyFeedback, error, 'room.joinFailed');
   } finally {
@@ -752,6 +784,7 @@ function renderRoomPanel(room) {
     roomSettings.open = false;
   }
   $('#spectator-note').hidden = !room.isSpectator;
+  $('#room-system-line').textContent = t('room.systemLine', { system: systemName(room.system || 'abismo', room.customSystem) });
 }
 
 function fillRoomSettings() {
@@ -761,6 +794,7 @@ function fillRoomSettings() {
   settingsPublic = activeRoom.isPublic;
   $('#settings-spectators').checked = activeRoom.allowSpectators;
   $('#settings-spectators').disabled = limits.maxSpectatorsPerRoom === 0;
+  fillSystemSelect($('#settings-system'), systemValue(activeRoom));
   renderSettingsOptions();
 }
 
@@ -774,7 +808,11 @@ function renderSettingsOptions() {
 }
 
 roomSettings.addEventListener('toggle', () => {
-  if (roomSettings.open) fillRoomSettings();
+  if (roomSettings.open) {
+    fillRoomSettings();
+    // Sistemas personalizados criados depois de entrar também aparecem.
+    loadCustomSystems().then(() => fillSystemSelect($('#settings-system'), systemValue(activeRoom)));
+  }
 });
 $('#settings-max-down').addEventListener('click', () => { settingsMaxPlayers -= 1; renderSettingsOptions(); });
 $('#settings-max-up').addEventListener('click', () => { settingsMaxPlayers += 1; renderSettingsOptions(); });
@@ -794,6 +832,9 @@ $('#room-settings-form').addEventListener('submit', async (event) => {
       isPublic: settingsPublic,
       allowSpectators: $('#settings-spectators').checked,
     });
+    if ($('#settings-system').value !== systemValue(activeRoom)) {
+      await applySystem($('#settings-system').value);
+    }
     roomSettings.open = false;
     say(roomFeedback, 'room.saved');
   } catch (error) {
@@ -1038,6 +1079,8 @@ connection.on('RoomUpdated', (roster) => {
       maxSpectators: roster.maxSpectators,
       players: roster.players,
       spectators: roster.spectators,
+      system: roster.system,
+      customSystem: roster.customSystem,
       isMaster: Boolean(me?.isMaster),
       // A lista da sala não traz rolagens nem conversa: a mesa e o chat mantêm o que já mostram.
       rolls: [],

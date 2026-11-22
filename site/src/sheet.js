@@ -5,6 +5,7 @@
 import { t } from './i18n.js';
 import { api, currentAccount, onAccountChange } from './account.js';
 import { STATUS_ICONS } from './combat.js';
+import { BUILT_IN_SYSTEMS, shapeDefaults, systemName, systemShape, systemSkillTest } from './systems.js';
 
 export const SKILLS = [
   ['acrobacia', 'agl'], ['crime', 'agl'], ['furtividade', 'agl'], ['pilotagem', 'agl'],
@@ -19,41 +20,65 @@ export const SKILLS = [
 ];
 const ATTRIBUTES = ['agl', 'for', 'int', 'pre', 'con'];
 const STATS = ['hp', 'ea', 'san'];
+const ALL_STATS = ['hp', 'ea', 'san', 'vig'];
+// Listas do sistema da ficha (Abismo usa as listas daqui).
+const statsOf = (sheet) => systemShape(sheet)?.stats.map(([id]) => id) || STATS;
+const attributesOf = (sheet) => systemShape(sheet)?.attributes.map(([id]) => id) || ATTRIBUTES;
+const skillsOf = (sheet) => systemShape(sheet)?.skills.map(([id, attribute]) => [id, attribute]) || SKILLS;
 const LISTS = ['effects', 'abilities', 'inventory'];
 export const QUICK_KINDS = ['test', 'attack', 'physical', 'magic', 'pierce', 'recovery'];
 const MAX_SHEETS = 20;
 
-// Teste da perícia: treinado + outros + metade do atributo, para baixo.
+// Teste da perícia, pela conta do sistema da ficha (Abismo: treinado + outros +
+// metade do atributo, para baixo).
 export function skillTest(sheet, skillId) {
-  const attribute = SKILLS.find(([id]) => id === skillId)?.[1];
-  const skill = sheet.skills?.[skillId] || {};
-  const value = sheet.attributes?.[attribute]?.value || 0;
-  return (skill.trained || 0) + (skill.other || 0) + Math.floor(value / 2);
+  return systemSkillTest(sheet, skillId, (id) => SKILLS.find(([skill]) => skill === id)?.[1]);
 }
 
-function blankSheet() {
+function blankSheet(system = 'abismo', template = null) {
+  const shaped = shapeDefaults(system, template);
   return {
     id: crypto.randomUUID().replaceAll('-', ''),
-    name: '', age: '', level: 1, race: '',
+    name: '', age: '', level: 1, race: '', class: '', defense: 0,
     hp: { max: 0, current: 0, other: 0 },
     ea: { max: 0, current: 0, other: 0 },
     san: { max: 0, current: 0, other: 0 },
-    attributes: Object.fromEntries(ATTRIBUTES.map((id) => [id, { value: 0, bonus: 0 }])),
-    skills: Object.fromEntries(SKILLS.map(([id]) => [id, { trained: 0, other: 0 }])),
+    vig: { max: 0, current: 0, other: 0 },
+    attributes: shaped?.attributes || Object.fromEntries(ATTRIBUTES.map((id) => [id, { value: 0, bonus: 0 }])),
+    skills: shaped?.skills || Object.fromEntries(SKILLS.map(([id]) => [id, { trained: 0, other: 0 }])),
     resist: { physical: 0, magic: 0, pierce: 0 },
     elements: '', extraElements: '',
     abilityPoints: 0,
     initiative: '',
-    system: 'abismo', labels: {},
+    system, template: system === 'custom' ? template : null, labels: {},
     effects: [], abilities: [], inventory: [],
     quickRolls: [],
     powers: [],
   };
 }
 
-// Nome que aparece na ficha: o que o jogador escolheu ou o padrão do idioma.
+// Mesma ficha do sistema? (personalizado: o mesmo modelo).
+export function sameSystem(sheet, system, customId = null) {
+  const own = sheet?.system || 'abismo';
+  return own === system && (system !== 'custom' || sheet.template?.id === customId);
+}
+
+// Nome que aparece na ficha: o que o jogador escolheu ou o padrão do sistema e idioma.
 export function sheetLabel(sheet, key) {
-  return sheet?.labels?.[key] || t(key);
+  if (sheet?.labels?.[key]) {
+    return sheet.labels[key];
+  }
+  const shape = systemShape(sheet);
+  if (shape) {
+    const [kind, id] = key.split('.');
+    const found = kind === 'skill' ? shape.skills.find(([skill]) => skill === id)?.[2]
+      : kind === 'attr' ? shape.attributes.find(([attribute]) => attribute === id)?.[1]
+        : kind === 'stat' ? shape.stats.find(([stat]) => stat === id)?.[1] : null;
+    if (found) {
+      return found;
+    }
+  }
+  return t(key);
 }
 
 function el(tag, props = {}, ...children) {
@@ -83,6 +108,9 @@ export function initSheet() {
   let pendingSave = false;
   let armedDelete = false;
   let renaming = false;
+  let roomSystem = null; // { system, custom } da mesa atual (null fora de mesa)
+  let customSystems = []; // sistemas personalizados da conta
+  let newSystem = 'abismo';
   let myPlayer = null;
   let roomPlayers = [];
   let statusLine = null;
@@ -109,6 +137,8 @@ export function initSheet() {
     } catch {
       documentState = { version: 0, activeId: null, sheets: [] };
     }
+    customSystems = await api('/api/account/systems').catch(() => []);
+    followRoomSystem();
     loading = false;
     render();
     emit();
@@ -159,8 +189,10 @@ export function initSheet() {
       for (const sheet of documentState.sheets) {
         const server = saved.sheets.find((candidate) => candidate.id === sheet.id);
         if (server) {
-          for (const stat of STATS) {
-            sheet[stat].current = server[stat].current;
+          for (const stat of ALL_STATS) {
+            if (sheet[stat] && server[stat]) {
+              sheet[stat].current = server[stat].current;
+            }
           }
         }
       }
@@ -299,7 +331,7 @@ export function initSheet() {
             ...common,
           ]
           : [
-            small('power.skill', select(SKILLS.map(([id]) => [id, sheetLabel(sheet, `skill.${id}`)]), power.skill, t('power.skill'), (value) => { power.skill = value; changed(); })),
+            small('power.skill', select(skillsOf(sheet).map(([id]) => [id, sheetLabel(sheet, `skill.${id}`)]), power.skill, t('power.skill'), (value) => { power.skill = value; changed(); })),
             ...common,
             small('power.status', select([['', t('power.noStatus')], ...Object.keys(STATUS_ICONS).map((id) => [id, `${STATUS_ICONS[id]} ${t(`status.${id}`)}`])],
               power.statusId || '', t('power.status'), (value) => { power.statusId = value || null; changed(); })),
@@ -323,10 +355,115 @@ export function initSheet() {
     return fold('power.title', true, el('p', { class: 'field-hint', text: t('power.hint') }), list, add);
   }
 
+  // Sistemas personalizados (fora da mesa): o mestre monta atributos, perícias e barras.
+  // Ficam na conta; na mesa, o mestre escolhe um deles e as fichas seguem esse modelo.
+  const slug = (text) => text.normalize('NFD').replace(/[^A-Za-z0-9]/g, '').toLowerCase().slice(0, 40);
+  function defaultCustomSystem() {
+    const attributes = [['forca', 'Força'], ['agilidade', 'Agilidade'], ['intelecto', 'Intelecto'], ['presenca', 'Presença'], ['vigor', 'Vigor']]
+      .map(([id, label]) => ({ id, name: label }));
+    const skills = [['atletismo', 'Atletismo', 'forca'], ['luta', 'Luta', 'forca'], ['acrobacia', 'Acrobacia', 'agilidade'],
+      ['furtividade', 'Furtividade', 'agilidade'], ['pontaria', 'Pontaria', 'agilidade'], ['reflexos', 'Reflexos', 'agilidade'],
+      ['investigacao', 'Investigação', 'intelecto'], ['medicina', 'Medicina', 'intelecto'], ['percepcao', 'Percepção', 'presenca'],
+      ['vontade', 'Vontade', 'presenca'], ['fortitude', 'Fortitude', 'vigor']].map(([id, label, attribute]) => ({ id, name: label, attribute }));
+    return { id: crypto.randomUUID().replaceAll('-', ''), name: t('system.newCustom'), attributes, skills, stats: ['hp', 'ea', 'san', 'vig'], statNames: {} };
+  }
+
+  function customSystemsEditor() {
+    let feedback = '';
+    const body = el('div', { class: 'custom-systems' });
+    const draw = () => {
+      body.replaceChildren(...customSystems.map((system, index) => {
+        const nameInput = textInput(system.name, (value) => { system.name = value; }, { max: 30, label: t('system.name'), placeholder: t('system.name') });
+        const remove = el('button', { class: 'text-button note-delete', type: 'button', text: t('notes.delete') });
+        remove.addEventListener('click', () => { customSystems.splice(index, 1); draw(); });
+        // Atributos.
+        const attributes = el('div', { class: 'custom-list' }, ...system.attributes.map((attribute, attrIndex) => {
+          const input = textInput(attribute.name, (value) => { attribute.name = value; }, { max: 20, label: t('sheet.attribute') });
+          const drop = el('button', { class: 'text-button', type: 'button', text: '×', 'aria-label': t('sheet.removeItem') });
+          drop.addEventListener('click', () => { system.attributes.splice(attrIndex, 1); draw(); });
+          return el('span', { class: 'custom-item' }, input, drop);
+        }));
+        const addAttribute = el('button', { class: 'text-button', type: 'button', text: t('system.addAttribute') });
+        addAttribute.addEventListener('click', () => {
+          if (system.attributes.length < 12) {
+            system.attributes.push({ id: crypto.randomUUID().replaceAll('-', '').slice(0, 12), name: '' });
+            draw();
+          }
+        });
+        // Perícias (cada uma ligada a um atributo).
+        const skills = el('div', { class: 'custom-list' }, ...system.skills.map((skill, skillIndex) => {
+          const input = textInput(skill.name, (value) => { skill.name = value; }, { max: 30, label: t('sheet.skill') });
+          const attribute = el('select', { 'aria-label': t('sheet.attribute') },
+            ...system.attributes.map((item) => el('option', { value: item.id, text: item.name || '?', selected: item.id === skill.attribute })));
+          attribute.addEventListener('change', () => { skill.attribute = attribute.value; });
+          const drop = el('button', { class: 'text-button', type: 'button', text: '×', 'aria-label': t('sheet.removeItem') });
+          drop.addEventListener('click', () => { system.skills.splice(skillIndex, 1); draw(); });
+          return el('span', { class: 'custom-item' }, input, attribute, drop);
+        }));
+        const addSkill = el('button', { class: 'text-button', type: 'button', text: t('system.addSkill') });
+        addSkill.addEventListener('click', () => {
+          if (system.skills.length < 60) {
+            system.skills.push({ id: '', name: '', attribute: system.attributes[0]?.id || '' });
+            draw();
+          }
+        });
+        // Barras: vida, mana, sanidade e vigor (liga, desliga e dá nome).
+        const stats = el('div', { class: 'custom-stats' }, ...['hp', 'ea', 'san', 'vig'].map((stat) => {
+          const box = el('input', { type: 'checkbox', checked: system.stats.includes(stat), 'aria-label': t(`system.stat.${stat}`) });
+          box.addEventListener('change', () => {
+            system.stats = box.checked ? [...new Set([...system.stats, stat])] : system.stats.filter((item) => item !== stat);
+          });
+          const label = textInput(system.statNames?.[stat] || '', (value) => { system.statNames ||= {}; system.statNames[stat] = value; },
+            { max: 20, label: t(`system.stat.${stat}`), placeholder: t(`system.stat.${stat}`) });
+          return el('span', { class: 'custom-item' }, box, label);
+        }));
+        return el('div', { class: 'custom-system-card' },
+          el('div', { class: 'custom-system-head' }, nameInput, remove),
+          el('span', { class: 'field-label', text: t('system.attributes') }), attributes, addAttribute,
+          el('span', { class: 'field-label', text: t('system.skills') }), skills, addSkill,
+          el('span', { class: 'field-label', text: t('system.stats') }), stats);
+      }));
+    };
+    draw();
+    const add = el('button', { class: 'room-button', type: 'button', text: t('system.new') });
+    add.addEventListener('click', () => {
+      if (customSystems.length < 20) {
+        customSystems.push(defaultCustomSystem());
+        draw();
+      }
+    });
+    const status = el('span', { class: 'sheet-save', role: 'status' });
+    const save = el('button', { class: 'room-button room-button-primary', type: 'button', text: t('room.save') });
+    save.addEventListener('click', async () => {
+      // Perícia nova ganha um id a partir do nome (Reflexos e Medicina viram as do combate).
+      for (const system of customSystems) {
+        const used = new Set();
+        for (const skill of system.skills) {
+          let id = skill.id || slug(skill.name) || crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+          while (used.has(id)) {
+            id += 'x';
+          }
+          skill.id = id;
+          used.add(id);
+        }
+      }
+      try {
+        customSystems = await api('/api/account/systems', { method: 'PUT', body: customSystems });
+        feedback = t('sheet.saved');
+      } catch {
+        feedback = t('sheet.saveFailed');
+      }
+      draw();
+      status.textContent = feedback;
+    });
+    return fold('system.customTitle', false, el('p', { class: 'field-hint', text: t('system.customHint') }), body,
+      el('div', { class: 'note-form-actions' }, add, status, save));
+  }
+
   function render() {
     view.replaceChildren();
     const head = el('div', { class: 'view-head' },
-      el('div', {}, el('p', { class: 'chapter', text: active() ? `${t('sheet.chapter')} · ${t('system.abismo')}` : t('sheet.chapter') }),
+      el('div', {}, el('p', { class: 'chapter', text: active() ? `${t('sheet.chapter')} · ${systemName(active().system || 'abismo', active().template).toUpperCase()}` : t('sheet.chapter') }),
         el('h2', { id: 'sheet-title', text: active()?.name || t('sheet.title') })));
     view.append(head);
 
@@ -345,7 +482,8 @@ export function initSheet() {
     const tools = el('div', { class: 'sheet-tools' });
     if (documentState.sheets.length > 0) {
       const picker = el('select', { 'aria-label': t('sheet.pick') });
-      for (const sheet of documentState.sheets) {
+      // Na mesa, só as fichas do sistema que o mestre escolheu.
+      for (const sheet of documentState.sheets.filter((candidate) => !roomSystem || sameSystem(candidate, roomSystem.system, roomSystem.custom?.id))) {
         picker.append(el('option', { value: sheet.id, text: sheet.name || t('sheet.unnamed'), selected: sheet.id === documentState.activeId }));
       }
       picker.addEventListener('change', () => {
@@ -356,10 +494,32 @@ export function initSheet() {
       });
       tools.append(picker);
     }
+    // Sistema da ficha nova: na mesa, o da mesa; fora dela, o jogador escolhe.
+    const systemPicker = el('select', { 'aria-label': t('sheet.system') });
+    for (const id of ['abismo', ...Object.keys(BUILT_IN_SYSTEMS)]) {
+      systemPicker.append(el('option', { value: id, text: systemName(id) }));
+    }
+    for (const custom of customSystems) {
+      systemPicker.append(el('option', { value: `custom:${custom.id}`, text: `${custom.name} (${t('system.custom')})` }));
+    }
+    systemPicker.value = [...systemPicker.options].some((option) => option.value === newSystem) ? newSystem : 'abismo';
+    systemPicker.addEventListener('change', () => { newSystem = systemPicker.value; });
+    if (!roomSystem) {
+      tools.append(systemPicker);
+    }
     const create = el('button', { class: 'room-button', type: 'button', text: t('sheet.new') });
     create.disabled = documentState.sheets.length >= MAX_SHEETS;
     create.addEventListener('click', () => {
-      const sheet = blankSheet();
+      const choice = roomSystem
+        ? (roomSystem.system === 'custom' ? `custom:${roomSystem.custom?.id}` : roomSystem.system)
+        : systemPicker.value;
+      const [system, customId] = choice.split(':');
+      const template = system === 'custom'
+        ? (roomSystem?.custom?.id === customId ? roomSystem.custom : customSystems.find((custom) => custom.id === customId))
+        : null;
+      const sheet = template || system !== 'custom'
+        ? blankSheet(system, template ? structuredClone(template) : null)
+        : blankSheet();
       documentState.sheets.push(sheet);
       documentState.activeId = sheet.id;
       render();
@@ -391,12 +551,20 @@ export function initSheet() {
     statusLine = el('span', { class: 'sheet-save', role: 'status', 'aria-live': 'polite' });
     tools.append(statusLine);
     view.append(tools);
+    if (!roomSystem) {
+      view.append(customSystemsEditor());
+    }
 
     const sheet = active();
     if (!sheet) {
       view.append(el('p', { class: 'sheet-empty', text: t('sheet.none') }));
       return;
     }
+    if (roomSystem && !sameSystem(sheet, roomSystem.system, roomSystem.custom?.id)) {
+      view.append(el('p', { class: 'sheet-empty', text: t('sheet.needSystem', { system: systemName(roomSystem.system, roomSystem.custom) }) }));
+      return;
+    }
+    const shape = systemShape(sheet);
     const change = (apply) => (value) => {
       apply(value);
       scheduleSave();
@@ -416,15 +584,22 @@ export function initSheet() {
     const identity = el('div', { class: 'sheet-card sheet-identity' },
       field('sheet.name', nameInput),
       field('sheet.age', textInput(sheet.age, change((value) => { sheet.age = value; }), { max: 20 })),
-      field('sheet.level', numberInput(sheet.level, change((value) => { sheet.level = value; }), { min: 0, max: 999 })),
-      field('sheet.race', textInput(sheet.race, change((value) => { sheet.race = value; }), { max: 40 })));
+      shape
+        ? el('label', { class: 'sheet-field' }, el('span', { text: shape.level }), numberInput(sheet.level, change((value) => { sheet.level = value; }), { min: 0, max: 999 }))
+        : field('sheet.level', numberInput(sheet.level, change((value) => { sheet.level = value; }), { min: 0, max: 999 })),
+      field('sheet.race', textInput(sheet.race, change((value) => { sheet.race = value; }), { max: 40 })),
+      // Outros sistemas: classe e defesa (CA, Defesa).
+      shape?.classLabel ? el('label', { class: 'sheet-field' }, el('span', { text: shape.classLabel }),
+        textInput(sheet.class, change((value) => { sheet.class = value; }), { max: 40 })) : null,
+      shape?.defense ? el('label', { class: 'sheet-field' }, el('span', { text: shape.defense }),
+        numberInput(sheet.defense, change((value) => { sheet.defense = value; }), { min: -99, max: 999 })) : null);
 
     // Status: máxima, atual (vai direto ao servidor), perdida (calculada) e outros.
     const statusTable = el('div', { class: 'sheet-card sheet-status' },
       el('div', { class: 'status-row status-head' },
         el('span', {}), el('span', { text: t('sheet.max') }), el('span', { text: t('sheet.current') }),
         el('span', { text: t('sheet.lost') }), el('span', { text: t('sheet.other') })));
-    for (const stat of STATS) {
+    for (const stat of statsOf(sheet)) {
       const block = sheet[stat];
       const current = numberInput(block.current, () => {}, { min: stat === 'hp' ? -999 : 0, max: 9999, label: `${t(`stat.${stat}`)} ${t('sheet.current')}` });
       current.dataset.current = stat;
@@ -454,7 +629,7 @@ export function initSheet() {
     }
     // Recuperação manual: soma no atual, sem passar do máximo.
     const recoverAmount = el('input', { type: 'number', min: 1, max: 9999, value: '', inputMode: 'numeric', placeholder: '0', 'aria-label': t('sheet.recoverAmount') });
-    const recoverStat = el('select', { 'aria-label': t('kind.recoverStat') }, ...STATS.map((stat) => el('option', { value: stat, text: sheetLabel(sheet, `stat.${stat}`) })));
+    const recoverStat = el('select', { 'aria-label': t('kind.recoverStat') }, ...statsOf(sheet).map((stat) => el('option', { value: stat, text: sheetLabel(sheet, `stat.${stat}`) })));
     const recoverButton = el('button', { class: 'room-button', type: 'button', text: t('sheet.apply') });
     recoverButton.addEventListener('click', () => {
       const amount = Number.parseInt(recoverAmount.value, 10);
@@ -472,7 +647,8 @@ export function initSheet() {
 
     // Atributos, nas cores da ficha.
     const attributes = el('div', { class: 'sheet-attributes' });
-    for (const id of ATTRIBUTES) {
+    for (const id of attributesOf(sheet)) {
+      sheet.attributes[id] ||= { value: shape?.attributeDefault || 0, bonus: 0 };
       const value = sheet.attributes[id];
       attributes.append(el('div', { class: 'attribute-tile', 'data-attribute': id },
         labelNode(sheet, `attr.${id}.name`, 'span', 'attribute-name'),
@@ -488,16 +664,26 @@ export function initSheet() {
       el('div', { class: 'skill-row skill-head' },
         el('span', { text: t('sheet.skill') }), el('span', { text: t('sheet.attribute') }),
         el('span', { text: t('sheet.trained') }), el('span', { text: t('sheet.other') }), el('span', { text: t('sheet.test') })));
-    for (const [id, attribute] of SKILLS) {
+    for (const [id, attribute] of skillsOf(sheet)) {
+      sheet.skills[id] ||= { trained: 0, other: 0 };
       const skill = sheet.skills[id];
+      // Treino: número livre (Abismo e personalizado) ou os graus do sistema.
+      let trained;
+      if (shape?.trained) {
+        trained = el('select', { 'aria-label': `${sheetLabel(sheet, `skill.${id}`)} ${t('sheet.trained')}` },
+          ...shape.trained.map(([value, text]) => el('option', { value: String(value), text, selected: Number(skill.trained) === value })));
+        trained.addEventListener('change', () => change((value) => { skill.trained = value; })(Number(trained.value)));
+      } else {
+        trained = numberInput(skill.trained, change((value) => { skill.trained = value; }), { min: -99, max: 99, label: `${sheetLabel(sheet, `skill.${id}`)} ${t('sheet.trained')}` });
+      }
       skills.append(el('div', { class: 'skill-row' },
         labelNode(sheet, `skill.${id}`, 'span', 'skill-name'),
-        el('span', { class: 'skill-attribute', 'data-attribute': attribute, text: t(`attr.${attribute}`) }),
-        numberInput(skill.trained, change((value) => { skill.trained = value; }), { min: -99, max: 99, label: `${t(`skill.${id}`)} ${t('sheet.trained')}` }),
+        el('span', { class: 'skill-attribute', 'data-attribute': attribute, text: shape ? sheetLabel(sheet, `attr.${attribute}.name`) : t(`attr.${attribute}`) }),
+        trained,
         numberInput(skill.other, change((value) => { skill.other = value; }), { min: -99, max: 99, label: `${t(`skill.${id}`)} ${t('sheet.other')}` }),
         el('output', { class: 'skill-test', 'data-test': id })));
     }
-    view.append(fold('sheet.skills', true, skills, el('p', { class: 'field-hint', text: t('sheet.skillLimit') })));
+    view.append(fold('sheet.skills', true, skills, el('p', { class: 'field-hint', text: t(shape ? `sheet.skillRule.${sheet.system}` : 'sheet.skillLimit') })));
 
     // Resistências e habilidades básicas.
     const resist = el('div', { class: 'sheet-grid' },
@@ -508,7 +694,13 @@ export function initSheet() {
       field('sheet.extraElements', textInput(sheet.extraElements, change((value) => { sheet.extraElements = value; }), { max: 80 }), sheet),
       field('sheet.abilityPoints', numberInput(sheet.abilityPoints, change((value) => { sheet.abilityPoints = value; }), { min: -999, max: 999 }), sheet),
       field('sheet.initiative', textInput(sheet.initiative, change((value) => { sheet.initiative = value; }), { max: 30, placeholder: '1d20+3' }), sheet));
-    view.append(fold('sheet.resistances', false, resist), fold('sheet.basics', false, basics));
+    // Resistências: Abismo e personalizado (o combate da mesa usa). Habilidades básicas: só Abismo.
+    if (!shape || shape.resist) {
+      view.append(fold('sheet.resistances', false, resist));
+    }
+    if (!shape) {
+      view.append(fold('sheet.basics', false, basics));
+    }
 
     // Listas livres.
     const lists = el('div', { class: 'sheet-lists' });
@@ -585,7 +777,7 @@ export function initSheet() {
     if (!sheet) {
       return;
     }
-    for (const stat of STATS) {
+    for (const stat of statsOf(sheet)) {
       const block = sheet[stat];
       const lost = view.querySelector(`[data-lost="${stat}"]`);
       if (lost) {
@@ -600,7 +792,7 @@ export function initSheet() {
         bar.style.width = `${block.max > 0 ? Math.max(0, Math.min(100, (block.current / block.max) * 100)) : 0}%`;
       }
     }
-    for (const [id] of SKILLS) {
+    for (const [id] of skillsOf(sheet)) {
       const output = view.querySelector(`[data-test="${id}"]`);
       if (output) {
         output.textContent = String(skillTest(sheet, id));
@@ -608,9 +800,34 @@ export function initSheet() {
     }
   }
 
+  // Na mesa, a ficha ativa precisa ser do sistema da mesa: troca para a primeira que for.
+  function followRoomSystem() {
+    if (!roomSystem || !documentState) {
+      return;
+    }
+    const current = active();
+    if (current && sameSystem(current, roomSystem.system, roomSystem.custom?.id)) {
+      return;
+    }
+    const match = documentState.sheets.find((sheet) => sameSystem(sheet, roomSystem.system, roomSystem.custom?.id));
+    if (match) {
+      documentState.activeId = match.id;
+      render();
+      scheduleSave();
+    } else {
+      render();
+    }
+  }
+
   // A mesa avisa quando HP/EA mudaram (poção, magia, dano): atualiza a ficha aberta.
   window.addEventListener('room-state', (event) => {
     const room = event.detail || {};
+    const nextSystem = room.code ? { system: room.system || 'abismo', custom: room.customSystem || null } : null;
+    if (JSON.stringify(nextSystem) !== JSON.stringify(roomSystem)) {
+      roomSystem = nextSystem;
+      followRoomSystem();
+      render();
+    }
     roomPlayers = Array.isArray(room.players) ? room.players : [];
     myPlayer = roomPlayers.find((player) => player.id === room.myPlayerId) || null;
     const status = myPlayer?.status;

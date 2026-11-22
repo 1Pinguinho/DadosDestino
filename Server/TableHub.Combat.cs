@@ -640,8 +640,8 @@ public sealed partial class TableHub
             var hp = fighter.IsBoss ? fighter.Hp : status?.Hp ?? 0;
             var down = IsDown(room, fighter);
             var reflex = fighter.IsBoss ? fighter.ReflexBonus
-                : player?.AccountId is { } id ? AccountStore.Instance.ReadActive(id, sheet => sheet.SkillTest("reflexos")) : 0;
-            var medicine = !fighter.IsBoss && player?.AccountId is { } medicId ? AccountStore.Instance.ReadActive(medicId, sheet => sheet.SkillTest("medicina")) : 0;
+                : player?.AccountId is { } id ? AccountStore.Instance.ReadActive(id, sheet => sheet.ReflexTest()) : 0;
+            var medicine = !fighter.IsBoss && player?.AccountId is { } medicId ? AccountStore.Instance.ReadActive(medicId, sheet => sheet.MedicineTest()) : 0;
             return new FighterView(
                 fighter.Id,
                 fighter.PlayerId,

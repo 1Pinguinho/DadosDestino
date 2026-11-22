@@ -5,6 +5,7 @@
 import { t, errorText } from './i18n.js';
 import { playTurn } from './sound.js';
 import { skillTest } from './sheet.js';
+import { systemTestNotation } from './systems.js';
 
 // Status de dano do sistema (a mesma lista do servidor) e o ícone de cada um.
 export const STATUS_ICONS = {
@@ -113,6 +114,16 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     const text = (sheet?.initiative || '').replace(/\s+/g, '');
     if (/^\d*d\d+([+-]\d+)?$/i.test(text)) {
       return text;
+    }
+    // Outros sistemas: a perícia Iniciativa (Ordem, Tormenta) ou o modificador de Destreza (D&D).
+    if (sheet?.system === 'ordem' || sheet?.system === 'tormenta') {
+      return systemTestNotation(sheet, 'iniciativa', skillTest(sheet, 'iniciativa'));
+    }
+    if (sheet?.system === 'dnd') {
+      return withBonus(Math.floor(((sheet.attributes?.dex?.value ?? 10) - 10) / 2));
+    }
+    if (sheet?.system === 'custom') {
+      return withBonus(0);
     }
     const agility = sheet?.attributes?.agl?.value || 0;
     return `1d20${agility ? (agility > 0 ? `+${agility}` : agility) : ''}`;

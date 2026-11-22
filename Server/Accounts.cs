@@ -299,7 +299,7 @@ public sealed class AccountStore
             {
                 return null;
             }
-            var block = stat switch { "hp" => sheet.Hp, "ea" => sheet.Ea, "san" => sheet.San, _ => null };
+            var block = stat switch { "hp" => sheet.Hp, "ea" => sheet.Ea, "san" => sheet.San, "vig" => sheet.Vig, _ => null };
             if (block is null)
             {
                 return null;
@@ -327,6 +327,25 @@ public sealed class AccountStore
         lock (gate)
         {
             WriteAtomic(Path.Combine(AccountFolder(accountId), "chefes.json"), JsonSerializer.SerializeToUtf8Bytes(clean, Json));
+        }
+        return clean;
+    }
+
+    // Sistemas personalizados do mestre.
+    public List<CustomSystem> Systems(string accountId)
+    {
+        lock (gate)
+        {
+            return CustomSystem.NormalizeList(ReadJson<List<CustomSystem>>(Path.Combine(folder, accountId, "sistemas.json")));
+        }
+    }
+
+    public List<CustomSystem> SaveSystems(string accountId, List<CustomSystem>? systems)
+    {
+        var clean = CustomSystem.NormalizeList(systems);
+        lock (gate)
+        {
+            WriteAtomic(Path.Combine(AccountFolder(accountId), "sistemas.json"), JsonSerializer.SerializeToUtf8Bytes(clean, Json));
         }
         return clean;
     }

@@ -23,6 +23,8 @@ Combate: o mestre clica em "Iniciar combate" na mesa. Todos rolam iniciativa e, 
 vez, você escolhe o alvo, o tipo do ataque e um status (se quiser) e rola o ataque; a
 faixa de combate diz o que fazer em cada passo. 20 natural é crítico; 20 na defesa dá
 contra-ataque. As habilidades da ficha aparecem no rolador.
+Fichas: Abismo, Ordem Paranormal, D&D 5e, Tormenta20 ou um sistema personalizado. O mestre
+escolhe o sistema da mesa e todos usam fichas daquele sistema.
 O mestre tem a aba "Escudo": testes às cegas, trilha ambiente, chefes prontos e notas secretas.
 Chefes prontos têm arma, perícias, habilidades e várias ações por turno, e podem lutar
 sozinhos (combate automático), que o mestre liga e desliga quando quiser.

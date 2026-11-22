@@ -175,6 +175,43 @@ public sealed partial class TableHub : Hub
         await Clients.Group(code).SendAsync("RoomUpdated", roster);
     }
 
+    // O mestre escolhe o sistema de ficha da mesa: um dos prontos ou um personalizado
+    // da conta dele (o modelo vai para todos, para as fichas seguirem esse formato).
+    public async Task SetRoomSystem(string systemId, string? customId)
+    {
+        var (code, playerId) = CurrentSeat();
+        RoomRoster roster;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(playerId, out var actor)
+                || actor.ConnectionId != Context.ConnectionId)
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            if (!actor.IsMaster)
+            {
+                throw new HubException("MASTER_ONLY");
+            }
+            if (systemId == "custom")
+            {
+                var custom = actor.AccountId is { } accountId && customId is not null
+                    ? AccountStore.Instance.Systems(accountId).FirstOrDefault(system => system.Id == customId)
+                    : null;
+                room.System = "custom";
+                room.CustomSystem = custom ?? throw new HubException("INVALID_REQUEST");
+            }
+            else
+            {
+                room.System = SheetSystems.Find(systemId)?.Id ?? throw new HubException("INVALID_REQUEST");
+                room.CustomSystem = null;
+            }
+            room.LastActivityUtc = DateTime.UtcNow;
+            roster = CreateRoster(code, room);
+            Persist(code, room);
+        }
+        await Clients.Group(code).SendAsync("RoomUpdated", roster);
+    }
+
     // ---------- contas ----------
 
     // O site manda o token da sessão logo ao conectar (e ao entrar ou sair da conta).
@@ -262,6 +299,8 @@ public sealed partial class TableHub : Hub
                     OwnerAccountId = accountId,
                     Notes = saved.Notes ?? new(),
                     MasterNotes = saved.MasterNotes ?? string.Empty,
+                    System = SheetSystems.Find(saved.System)?.Id ?? (saved.System == "custom" && saved.CustomSystem is not null ? "custom" : "abismo"),
+                    CustomSystem = saved.System == "custom" ? saved.CustomSystem?.Normalized() : null,
                 });
             }
         }
@@ -396,6 +435,8 @@ public sealed partial class TableHub : Hub
             OwnerAccountId = room.OwnerAccountId,
             Notes = room.Notes.ToList(),
             MasterNotes = room.MasterNotes,
+            System = room.System,
+            CustomSystem = room.CustomSystem,
         });
     }
 
@@ -1069,7 +1110,9 @@ public sealed partial class TableHub : Hub
             room.OwnerAccountId is not null,
             ViewOf(room, viewer.IsMaster),
             room.BlindRequests.Where(pair => pair.Value.PlayerId == viewer.Id).Select(pair => pair.Value.View(pair.Key)).ToArray(),
-            room.Ambient);
+            room.Ambient,
+            room.System,
+            room.CustomSystem);
     }
 
     private static RoomPlayer ToRoomPlayer(PlayerState player, SharedRoll? lastRoll)
@@ -1110,7 +1153,9 @@ public sealed partial class TableHub : Hub
         maxSpectatorsSetting,
         room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc)
             .Select(player => ToRoomPlayer(player, null)).ToArray(),
-        Spectators(room));
+        Spectators(room),
+        room.System,
+        room.CustomSystem);
 
     private static RoomSpectator[] Spectators(RoomState room) => room.Players.Values
         .Where(player => player.IsSpectator)
@@ -1165,6 +1210,8 @@ public sealed partial class TableHub : Hub
         public CombatState? Combat { get; set; }
         public string MasterNotes { get; set; } = string.Empty;
         public string Ambient { get; set; } = string.Empty;
+        public string System { get; set; } = "abismo";
+        public CustomSystem? CustomSystem { get; set; }
         // Testes às cegas pedidos pelo mestre e ainda não rolados (id → pedido).
         public Dictionary<string, BlindRequestState> BlindRequests { get; } = new(StringComparer.Ordinal);
         // Conta do mestre que criou a sala: com ela, a sala fica salva em disco.

@@ -61,6 +61,12 @@ public sealed class Sheet
     public StatBlock Hp { get; set; } = new();
     public StatBlock Ea { get; set; } = new();
     public StatBlock San { get; set; } = new();
+    public StatBlock Vig { get; set; } = new();
+    // Outros sistemas: classe/origem e defesa (CA, Defesa).
+    public string Class { get; set; } = string.Empty;
+    public int Defense { get; set; }
+    // Sistema personalizado: o modelo vai junto na ficha.
+    public CustomSystem? Template { get; set; }
     public Dictionary<string, AttributeValue> Attributes { get; set; } = new();
     public Dictionary<string, SkillValue> Skills { get; set; } = new();
     public Resistances Resist { get; set; } = new();
@@ -81,17 +87,47 @@ public sealed class Sheet
 
     public int AttributeValue(string id) => Attributes.TryGetValue(id, out var value) ? value.Value : 0;
 
-    // Teste da perícia: treinado + outros + metade do atributo (para baixo).
+    public SystemDef Def() => System == "custom" ? (Template?.ToDef() ?? new SystemDef("custom", Array.Empty<string>(), Array.Empty<(string, string)>(), new[] { "hp" }, "", "", 0))
+        : SheetSystems.Find(System) ?? SheetSystems.Abismo;
+
+    // Teste da perícia, pela conta de cada sistema:
+    // Abismo: treinado + outros + metade do atributo (para baixo).
+    // Ordem Paranormal: grau de treino (0/5/10/15) + outros (os dados são o atributo em d20).
+    // D&D 5e: modificador do atributo + proficiência (×0, ×1 ou ×2) + outros.
+    // Tormenta20: metade do nível + atributo + treino (+2/+4/+6) + outros.
+    // Personalizado: treinado + outros + atributo.
     public int SkillTest(string skillId)
     {
-        var attribute = SkillList.FirstOrDefault(skill => skill.Id == skillId).Attribute;
+        var def = Def();
+        var attribute = def.Skills.FirstOrDefault(skill => skill.Id == skillId).Attribute;
         if (attribute is null)
         {
             return 0;
         }
         var skill = Skills.TryGetValue(skillId, out var value) ? value : new SkillValue();
-        return skill.Trained + skill.Other + (int)Math.Floor(AttributeValue(attribute) / 2.0);
+        var score = AttributeValue(attribute);
+        return def.Id switch
+        {
+            "ordem" => skill.Trained + skill.Other,
+            "dnd" => (int)Math.Floor((score - 10) / 2.0) + skill.Trained * (2 + Math.Max(0, Level - 1) / 4) + skill.Other,
+            "tormenta" => Level / 2 + score + (skill.Trained > 0 ? (Level >= 15 ? 6 : Level >= 7 ? 4 : 2) : 0) + skill.Other,
+            "custom" => skill.Trained + skill.Other + score,
+            _ => skill.Trained + skill.Other + (int)Math.Floor(score / 2.0),
+        };
     }
+
+    // Defesa no combate (Reflexos) e socorro (Medicina), conforme o sistema.
+    public int ReflexTest() => Def() is { Id: "dnd" } ? (int)Math.Floor((AttributeValue("dex") - 10) / 2.0) : SkillTest(Def().ReflexSkill);
+
+    public int MedicineTest() => SkillTest(Def().MedicineSkill);
+
+    private (int Min, int Max) TrainedRange() => Def().Id switch
+    {
+        "ordem" => (0, 15),
+        "dnd" => (0, 2),
+        "tormenta" => (0, 1),
+        _ => (-99, 99),
+    };
 
     public void Normalize()
     {
@@ -107,16 +143,25 @@ public sealed class Sheet
         Hp = (Hp ?? new()).Normalized(MinHp);
         Ea = (Ea ?? new()).Normalized(0);
         San = (San ?? new()).Normalized(0);
-        Attributes = AttributeIds.ToDictionary(id => id, id =>
+        Vig = (Vig ?? new()).Normalized(0);
+        // Sistema: um dos prontos ou "custom" (com o modelo junto). Atributos e perícias
+        // seguem a lista do sistema.
+        System = System == "custom" && Template is not null ? "custom" : SheetSystems.Find(System)?.Id ?? "abismo";
+        Template = System == "custom" ? Template!.Normalized() : null;
+        var def = Def();
+        var (trainedMin, trainedMax) = TrainedRange();
+        Attributes = def.Attributes.ToDictionary(id => id, id =>
         {
-            var value = Attributes?.GetValueOrDefault(id) ?? new AttributeValue();
+            var value = Attributes?.GetValueOrDefault(id) ?? new AttributeValue { Value = def.AttributeDefault };
             return new AttributeValue { Value = Clamp(value.Value, -99, 99), Bonus = Clamp(value.Bonus, -99, 99) };
         });
-        Skills = SkillList.ToDictionary(skill => skill.Id, skill =>
+        Skills = def.Skills.ToDictionary(skill => skill.Id, skill =>
         {
             var value = Skills?.GetValueOrDefault(skill.Id) ?? new SkillValue();
-            return new SkillValue { Trained = Clamp(value.Trained, -99, 99), Other = Clamp(value.Other, -99, 99) };
+            return new SkillValue { Trained = Clamp(value.Trained, trainedMin, trainedMax), Other = Clamp(value.Other, -99, 99) };
         });
+        Class = Clean(Class, 40);
+        Defense = Clamp(Defense, -99, 999);
         Resist = new Resistances
         {
             Physical = Clamp(Resist?.Physical ?? 0, 0, 999),
@@ -127,7 +172,6 @@ public sealed class Sheet
         ExtraElements = Clean(ExtraElements, 80);
         AbilityPoints = Clamp(AbilityPoints, -999, 999);
         Initiative = Clean(Initiative, 30);
-        System = "abismo";
         Labels = (Labels ?? new())
             .Where(pair => pair.Key is { Length: > 0 and <= 40 } && pair.Key.All(character => char.IsAsciiLetterOrDigit(character) || character == '.'))
             .Select(pair => (pair.Key, Value: Clean(pair.Value, 30)))
@@ -254,7 +298,7 @@ public sealed class Power
             Name = Sheet.Clean(Name, 30),
             Kind = kind,
             Notation = Sheet.Clean(Notation, 60),
-            Skill = Sheet.SkillList.Any(skill => skill.Id == Skill) ? Skill : kind switch { "magic" => "magia", "pierce" => "pontaria", _ => "luta" },
+            Skill = CustomSystem.CleanId(Skill) is { Length: > 0 } skill ? skill : kind switch { "magic" => "magia", "pierce" => "pontaria", _ => "luta" },
             EaCost = Sheet.Clamp(EaCost, 0, Sheet.MaxStatus),
             UsesPerTurn = Sheet.Clamp(UsesPerTurn, 0, 10),
             Cooldown = Sheet.Clamp(Cooldown, 0, 20),
