@@ -80,6 +80,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
   const nameOf = (id) => fighter(id)?.name || '';
   const isMaster = () => Boolean(room?.isMaster);
   const controls = (target) => Boolean(target && (target.isBoss ? isMaster() : target.playerId === room?.myPlayerId));
+  const abismoTable = () => (room?.system || 'abismo') === 'abismo';
   const mine = () => view?.fighters.find((candidate) => !candidate.isBoss && candidate.playerId === room?.myPlayerId) || null;
 
   async function run(method, ...args) {
@@ -220,7 +221,23 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
       return withBonus(current.boss?.skills?.[ATTACK_SKILL[type]] || 0);
     }
     const sheet = getSheet();
-    return withBonus(sheet ? skillTest(sheet, ATTACK_SKILL[type]) : 0);
+    if (!sheet) {
+      return withBonus(0);
+    }
+    // Perícia de ataque de cada sistema (D&D: modificador de Força ou Destreza).
+    const system = sheet.system || 'abismo';
+    if (system === 'dnd') {
+      const score = sheet.attributes?.[type === 'pierce' ? 'dex' : 'str']?.value ?? 10;
+      return withBonus(Math.floor((score - 10) / 2));
+    }
+    const skill = ({ ordem: { magic: 'ocultismo' }, tormenta: { magic: 'misticismo' } }[system] || {})[type] || ATTACK_SKILL[type];
+    return systemTestNotation(sheet, skill, skillTest(sheet, skill));
+  }
+
+  // Teste do próprio jogador no sistema dele (Ordem rola o atributo em d20).
+  function ownTest(skill, bonus) {
+    const sheet = getSheet();
+    return sheet ? systemTestNotation(sheet, skill, bonus) : withBonus(bonus);
   }
 
   function attackPlanner(current) {
@@ -249,8 +266,9 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     status.addEventListener('change', () => { chosen.status = status.value; });
     const notation = attackNotation(current, chosen.type);
     const roll = button(t('combat.rollButton', { what: t('effect.attack'), notation }),
-      () => rollNotation(notation, { kind: 'attack', damageType: chosen.type, statusId: chosen.status || null }), 'combat-button is-primary');
-    wrap.append(types, status, roll);
+      () => rollNotation(notation, { kind: 'attack', damageType: chosen.type, statusId: abismoTable() ? chosen.status || null : null }), 'combat-button is-primary');
+    // Status de dano são regra do Abismo: em outros sistemas a escolha não aparece.
+    wrap.append(...[types, abismoTable() ? status : null, roll].filter(Boolean));
     if (chosen.type === 'magic') {
       wrap.append(span('attack-hint', t('combat.magicHint')));
     }
@@ -350,7 +368,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
         }
       } else if (view.step === 'reflex' && target && controls(target)) {
         text = t('combat.underAttack', { actor: current?.name || '', total: view.attackTotal, target: target.name });
-        const notation = withBonus(target.reflex);
+        const notation = target.isBoss ? withBonus(target.reflex) : ownTest('reflexos', target.reflex);
         actions.append(button(t('combat.rollButton', { what: t('skill.reflexos'), notation }), () => rollNotation(notation, { kind: 'reflex' }), 'combat-button is-primary'));
       } else if (controls(current)) {
         if (view.step === 'damage') {
@@ -379,7 +397,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           }
         } else if (target.down) {
           text = t('combat.rescue', { target: target.name, dt: target.dt });
-          const notation = withBonus(current.medicine);
+          const notation = current.isBoss ? withBonus(current.medicine) : ownTest('medicina', current.medicine);
           actions.append(button(t('combat.rollButton', { what: t('skill.medicina'), notation }), () => rollNotation(notation, { kind: 'medicine' }), 'combat-button is-primary'));
         } else {
           // Antes de rolar: tipo do ataque (magia não deixa o alvo se defender) e status.
@@ -553,7 +571,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     }
     statusRow.append(span('combat-status-label', t('combat.statusFor')), who,
       statusPicker((statusId) => run('ApplyStatus', who.value, statusId), 'combat.applyStatus'));
-    details.append(list, statusRow, form, controlsRow);
+    details.append(...[list, abismoTable() ? statusRow : null, form, controlsRow].filter(Boolean));
     return details;
   }
 
@@ -700,7 +718,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           return { kind: 'medicine' };
         }
         const chosen = currentPlan();
-        return { kind: 'attack', damageType: chosen.type, statusId: chosen.status || null };
+        return { kind: 'attack', damageType: chosen.type, statusId: abismoTable() ? chosen.status || null : null };
       }
       return null;
     },

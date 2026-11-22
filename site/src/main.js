@@ -230,7 +230,12 @@ function updateSeatStatus(entry, status) {
   if (!status) {
     return;
   }
-  entry.status.replaceChildren(...[['hp', status.hp, status.hpMax], ['ea', status.ea, status.eaMax]].map(([stat, value, max]) => {
+  // Nomes das barras do sistema da ficha (PV, PE, PM...); sem barra de energia, só a vida.
+  const bars = [['hp', status.hp, status.hpMax]];
+  if (status.hasEa !== false) {
+    bars.push(['ea', status.ea, status.eaMax]);
+  }
+  entry.status.replaceChildren(...bars.map(([stat, value, max]) => {
     const row = document.createElement('span');
     const label = document.createElement('b');
     const bar = document.createElement('span');
@@ -238,7 +243,7 @@ function updateSeatStatus(entry, status) {
     const numbers = document.createElement('small');
     row.className = 'seat-stat';
     row.dataset.stat = stat;
-    label.textContent = t(`stat.${stat}`);
+    label.textContent = status.names?.[stat] || sheetLabel({ system: status.system || 'abismo' }, `stat.${stat}`);
     bar.className = 'seat-stat-bar';
     fill.style.width = `${max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0}%`;
     bar.append(fill);

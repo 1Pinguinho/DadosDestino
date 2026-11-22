@@ -42,6 +42,10 @@ public sealed partial class TableHub
     // durante o passo do dano (uma vez por ação).
     public Task ApplyStatus(string fighterId, string statusId) => CombatAction((room, combat, actor) =>
     {
+        if (room.System != "abismo")
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
         var rule = StatusRules.FirstOrDefault(candidate => candidate.Id == statusId) ?? throw new HubException("INVALID_REQUEST");
         var target = FindFighter(combat, fighterId);
         var current = combat.Current;

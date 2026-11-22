@@ -3,6 +3,7 @@
 // para quem está numa sala com conta. Depois de cada rolagem volta para "Normal".
 import { t } from './i18n.js';
 import { currentAccount, onAccountChange } from './account.js';
+import { sheetLabel } from './sheet.js';
 
 const DAMAGE = ['physical', 'magic', 'pierce'];
 
@@ -22,6 +23,17 @@ export function initRollKind({ getRoom, getSheet }) {
     controls.hidden = !visible;
     if (!visible) {
       return;
+    }
+    // Nomes das barras do sistema da ficha (Abismo: Vida e EA; Ordem: PV e PE...).
+    const sheet = getSheet();
+    if (sheet && (sheet.system || 'abismo') !== 'abismo') {
+      recoverStat.querySelector('[value="hp"]').textContent = sheetLabel(sheet, 'stat.hp');
+      recoverStat.querySelector('[value="ea"]').textContent = sheetLabel(sheet, 'stat.ea');
+      manaField.querySelector('span').textContent = sheetLabel(sheet, 'stat.ea').toUpperCase();
+    } else {
+      recoverStat.querySelector('[value="hp"]').textContent = t('kind.hp');
+      recoverStat.querySelector('[value="ea"]').textContent = t('kind.ea');
+      manaField.querySelector('span').textContent = t('kind.manaCost');
     }
     const recovery = kind.value === 'recovery';
     recoverStat.hidden = !recovery;

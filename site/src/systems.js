@@ -24,6 +24,7 @@ export const BUILT_IN_SYSTEMS = {
     stats: { hp: name('PV', 'HP'), ea: name('PE', 'EP'), san: name('SAN', 'SAN') },
     trained: [[0, name('Destreinado', 'Untrained')], [5, name('Treinado +5', 'Trained +5')], [10, name('Veterano +10', 'Veteran +10')], [15, name('Expert +15', 'Expert +15')]],
     level: name('NEX %', 'NEX %'),
+    race: name('ORIGEM', 'ORIGIN'),
     classLabel: name('CLASSE / TRILHA', 'CLASS / PATH'),
     defense: name('DEFESA', 'DEFENSE'),
   },
@@ -41,8 +42,10 @@ export const BUILT_IN_SYSTEMS = {
     stats: { hp: name('PV', 'HP') },
     trained: [[0, name('—', '—')], [1, name('Proficiente', 'Proficient')], [2, name('Especialista', 'Expertise')]],
     level: name('NÍVEL', 'LEVEL'),
+    race: name('ESPÉCIE', 'SPECIES'),
     classLabel: name('CLASSE', 'CLASS'),
     defense: name('CA', 'AC'),
+    extra: name('PV TEMP.', 'TEMP HP'),
   },
   tormenta: {
     attributes: { for: name('FOR', 'STR'), des: name('DES', 'DEX'), con: name('CON', 'CON'), int: name('INT', 'INT'), sab: name('SAB', 'WIS'), car: name('CAR', 'CHA') },
@@ -62,6 +65,7 @@ export const BUILT_IN_SYSTEMS = {
     stats: { hp: name('PV', 'HP'), ea: name('PM', 'MP') },
     trained: [[0, name('—', '—')], [1, name('Treinado', 'Trained')]],
     level: name('NÍVEL', 'LEVEL'),
+    race: name('RAÇA', 'RACE'),
     classLabel: name('CLASSE', 'CLASS'),
     defense: name('DEFESA', 'DEFENSE'),
   },
@@ -94,6 +98,9 @@ export function systemShape(sheet) {
       level: t('sheet.level'),
       classLabel: null,
       defense: null,
+      race: null,
+      extra: null,
+      hasEa: template.stats.includes('ea'),
       resist: true,
     };
   }
@@ -107,6 +114,9 @@ export function systemShape(sheet) {
     level: pick(def.level),
     classLabel: pick(def.classLabel),
     defense: pick(def.defense),
+    race: pick(def.race),
+    extra: def.extra ? pick(def.extra) : null,
+    hasEa: Boolean(def.stats.ea),
     resist: false,
   };
 }

@@ -42,7 +42,8 @@ public sealed partial class TableHub
         }
         combat.TargetId = target.Id;
         combat.AttackType = type;
-        combat.PendingStatusId = statusId;
+        // Status de dano são regra do Abismo: em mesa de outro sistema não entram.
+        combat.PendingStatusId = room.System == "abismo" ? statusId : null;
         combat.Critical = natural == 20;
         combat.AttackTotal = total;
         combat.AutoNextUtc = DateTime.UtcNow + AutoDelay;

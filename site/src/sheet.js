@@ -288,6 +288,7 @@ export function initSheet() {
   // recarga e status. Na mesa elas aparecem no rolador, prontas para usar.
   function powersEditor(sheet) {
     sheet.powers ||= [];
+    const shape = systemShape(sheet);
     const list = el('div', { class: 'power-list' });
     const select = (options, value, label, onChange) => {
       const element = el('select', { 'aria-label': label },
@@ -309,7 +310,9 @@ export function initSheet() {
         const kind = select(['physical', 'magic', 'pierce', 'recovery'].map((id) => [id, t(`power.kind.${id}`)]), power.kind, t('power.kind'), (value) => {
           power.kind = value;
           if (value !== 'recovery') {
-            power.skill = { magic: 'magia', pierce: 'pontaria' }[value] || 'luta';
+            const wanted = { magic: 'magia', pierce: 'pontaria' }[value] || 'luta';
+            const ids = skillsOf(sheet).map(([id]) => id);
+            power.skill = ids.includes(wanted) ? wanted : ids[0] || wanted;
           }
           draw();
           scheduleSave();
@@ -320,20 +323,25 @@ export function initSheet() {
           textInput(power.notation, (value) => { power.notation = value.replace(/\s+/g, ''); changed(); }, { max: 60, label: t('power.notation'), placeholder: power.kind === 'recovery' ? '2d8+2' : '2d6+3' }),
           remove);
         const common = [
-          small('power.ea', numberInput(power.eaCost, (value) => { power.eaCost = value; changed(); }, { min: 0, max: 9999 })),
+          // Custo na barra de energia do sistema (EA, PE, PM...); D&D não tem.
+          !shape || shape.hasEa
+            ? el('label', { class: 'power-field' }, el('span', { text: shape ? sheetLabel(sheet, 'stat.ea').toUpperCase() : t('power.ea') }),
+              numberInput(power.eaCost, (value) => { power.eaCost = value; changed(); }, { min: 0, max: 9999 }))
+            : null,
           small('power.uses', numberInput(power.usesPerTurn, (value) => { power.usesPerTurn = value; changed(); }, { min: 0, max: 10 })),
           small('power.cooldown', numberInput(power.cooldown, (value) => { power.cooldown = value; changed(); }, { min: 0, max: 20 })),
         ];
         const details = power.kind === 'recovery'
           ? [
-            small('power.recover', select([['hp', t('kind.hp')], ['ea', t('kind.ea')]], power.recoverStat, t('power.recover'), (value) => { power.recoverStat = value; changed(); })),
+            small('power.recover', select(statsOf(sheet).filter((stat) => stat === 'hp' || stat === 'ea').map((stat) => [stat, sheetLabel(sheet, `stat.${stat}`)]), power.recoverStat, t('power.recover'), (value) => { power.recoverStat = value; changed(); })),
             small('power.area', select([['single', t('power.area.single')], ['area', t('power.area.area')]], power.area, t('power.area'), (value) => { power.area = value; changed(); })),
             ...common,
           ]
           : [
             small('power.skill', select(skillsOf(sheet).map(([id]) => [id, sheetLabel(sheet, `skill.${id}`)]), power.skill, t('power.skill'), (value) => { power.skill = value; changed(); })),
             ...common,
-            small('power.status', select([['', t('power.noStatus')], ...Object.keys(STATUS_ICONS).map((id) => [id, `${STATUS_ICONS[id]} ${t(`status.${id}`)}`])],
+            // Status de dano são regra do Abismo.
+            shape ? null : small('power.status', select([['', t('power.noStatus')], ...Object.keys(STATUS_ICONS).map((id) => [id, `${STATUS_ICONS[id]} ${t(`status.${id}`)}`])],
               power.statusId || '', t('power.status'), (value) => { power.statusId = value || null; changed(); })),
           ];
         return el('div', { class: 'power-card', 'data-kind': power.kind }, top, el('div', { class: 'power-row power-details' }, ...details));
@@ -587,7 +595,9 @@ export function initSheet() {
       shape
         ? el('label', { class: 'sheet-field' }, el('span', { text: shape.level }), numberInput(sheet.level, change((value) => { sheet.level = value; }), { min: 0, max: 999 }))
         : field('sheet.level', numberInput(sheet.level, change((value) => { sheet.level = value; }), { min: 0, max: 999 })),
-      field('sheet.race', textInput(sheet.race, change((value) => { sheet.race = value; }), { max: 40 })),
+      shape?.race
+        ? el('label', { class: 'sheet-field' }, el('span', { text: shape.race }), textInput(sheet.race, change((value) => { sheet.race = value; }), { max: 40 }))
+        : field('sheet.race', textInput(sheet.race, change((value) => { sheet.race = value; }), { max: 40 })),
       // Outros sistemas: classe e defesa (CA, Defesa).
       shape?.classLabel ? el('label', { class: 'sheet-field' }, el('span', { text: shape.classLabel }),
         textInput(sheet.class, change((value) => { sheet.class = value; }), { max: 40 })) : null,
@@ -595,10 +605,14 @@ export function initSheet() {
         numberInput(sheet.defense, change((value) => { sheet.defense = value; }), { min: -99, max: 999 })) : null);
 
     // Status: máxima, atual (vai direto ao servidor), perdida (calculada) e outros.
-    const statusTable = el('div', { class: 'sheet-card sheet-status' },
+    // Abismo: máxima, atual, perdida e outros. Outros sistemas: só o que eles usam
+    // (máxima e atual; no D&D, também os PV temporários).
+    const extraColumn = shape?.extra || null;
+    const statusTable = el('div', { class: `sheet-card sheet-status${shape ? ' is-system' : ''}${extraColumn ? ' has-extra' : ''}` },
       el('div', { class: 'status-row status-head' },
         el('span', {}), el('span', { text: t('sheet.max') }), el('span', { text: t('sheet.current') }),
-        el('span', { text: t('sheet.lost') }), el('span', { text: t('sheet.other') })));
+        shape ? null : el('span', { text: t('sheet.lost') }),
+        shape ? (extraColumn ? el('span', { text: extraColumn }) : null) : el('span', { text: t('sheet.other') })));
     for (const stat of statsOf(sheet)) {
       const block = sheet[stat];
       const current = numberInput(block.current, () => {}, { min: stat === 'hp' ? -999 : 0, max: 9999, label: `${t(`stat.${stat}`)} ${t('sheet.current')}` });
@@ -623,8 +637,10 @@ export function initSheet() {
         labelNode(sheet, `stat.${stat}`, 'strong'),
         max,
         current,
-        el('output', { 'data-lost': stat }),
-        numberInput(block.other, change((value) => { block.other = value; }), { label: `${t(`stat.${stat}`)} ${t('sheet.other')}` }),
+        shape ? null : el('output', { 'data-lost': stat }),
+        !shape || (extraColumn && stat === 'hp')
+          ? numberInput(block.other, change((value) => { block.other = value; }), { label: `${sheetLabel(sheet, `stat.${stat}`)} ${extraColumn || t('sheet.other')}` })
+          : (extraColumn ? el('span', {}) : null),
         el('span', { class: 'status-bar', 'aria-hidden': 'true' }, el('i', { 'data-bar': stat }))));
     }
     // Recuperação manual: soma no atual, sem passar do máximo.

@@ -356,7 +356,24 @@ public sealed class AccountStore
         lock (gate)
         {
             var sheet = LoadSheets(accountId).Active;
-            return sheet is null ? null : new SheetStatus(sheet.Id, sheet.Name, sheet.Hp.Current, sheet.Hp.Max, sheet.Ea.Current, sheet.Ea.Max);
+            if (sheet is null)
+            {
+                return null;
+            }
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var stat in new[] { "hp", "ea" })
+            {
+                if (sheet.Labels.TryGetValue($"stat.{stat}", out var renamed))
+                {
+                    names[stat] = renamed;
+                }
+                else if (sheet.Template?.StatNames.TryGetValue(stat, out var custom) == true && custom.Length > 0)
+                {
+                    names[stat] = custom;
+                }
+            }
+            return new SheetStatus(sheet.Id, sheet.Name, sheet.Hp.Current, sheet.Hp.Max, sheet.Ea.Current, sheet.Ea.Max,
+                sheet.System, sheet.Def().Stats.Contains("ea"), names);
         }
     }
 
@@ -511,7 +528,10 @@ public sealed class AccountStore
 public sealed record AccountInfo(string Id, string Username, int AvatarVersion);
 
 // O que a mesa mostra da ficha ativa de cada jogador.
-public sealed record SheetStatus(string SheetId, string Name, int Hp, int HpMax, int Ea, int EaMax);
+// System e Names: para a mesa mostrar os nomes das barras do sistema (PV, PE, PM...) e
+// esconder a de energia quando o sistema não tem.
+public sealed record SheetStatus(string SheetId, string Name, int Hp, int HpMax, int Ea, int EaMax,
+    string System = "abismo", bool HasEa = true, IReadOnlyDictionary<string, string>? Names = null);
 
 public sealed record SessionResult(string Token, DateTime ExpiresUtc, bool Remember, AccountInfo Account);
 
