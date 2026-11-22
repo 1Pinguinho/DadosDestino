@@ -55,7 +55,14 @@ public sealed record RoomSnapshot(
     bool IsSpectator,
     IReadOnlyList<RoomPlayer> Players,
     IReadOnlyList<RoomSpectator> Spectators,
-    IReadOnlyList<SharedRoll> Rolls);
+    IReadOnlyList<SharedRoll> Rolls,
+    IReadOnlyList<ChatMessage> Chat);
+
+// Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
+public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp);
+
+// Reação rápida (um emoji da lista em TableHub.Reactions) na mesa de um jogador; não é guardada.
+public sealed record TableReaction(string TargetPlayerId, string Emoji, string From);
 
 public sealed record PublicRoom(
     string Code,

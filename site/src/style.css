@@ -718,3 +718,57 @@ html.has-titlebar .settings-panel { max-height: calc(100vh - 144px); }
 
 .dice-preview .roll-die-label::after { font-size: 6px !important; }
 html.reduce-motion .die-crack-glow { animation: none !important; }
+
+/* ---------- abas do painel lateral: histórico e chat ---------- */
+.side-tabs { display: flex; align-items: baseline; gap: 16px; }
+.side-tab { position: relative; padding: 0; border: 0; background: none; color: var(--faint); cursor: pointer; font: 500 22px var(--serif); transition: color .18s ease; }
+.side-tab[aria-selected='true'] { color: var(--ink); font-size: 28px; }
+.side-tab:hover:not([aria-selected='true']) { color: var(--muted); }
+.side-tab:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.side-tab[hidden], .side-pane[hidden] { display: none; }
+.unread-dot { position: absolute; top: 2px; right: -9px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.unread-dot[hidden] { display: none; }
+.side-pane { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+
+.chat-list { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; margin: 0 -8px 0 0; padding: 10px 8px 6px 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.chat-list::-webkit-scrollbar { width: 6px; }
+.chat-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--line); }
+.chat-list:empty { display: none; }
+.chat-message { padding: 7px 0 1px; animation: reveal .2s ease-out both; }
+.chat-message.is-grouped { padding-top: 1px; }
+.chat-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.chat-name { min-width: 0; overflow: hidden; color: var(--ink); font: 500 13px var(--serif); text-overflow: ellipsis; white-space: nowrap; }
+.chat-name[data-color] { color: color-mix(in srgb, var(--hue-color, var(--accent)) 72%, var(--ink)); }
+.chat-name.is-spectator { color: var(--muted); font-style: italic; }
+.chat-head time { flex: 0 0 auto; color: var(--faint); font: 8px var(--mono); }
+.chat-text { margin: 0; padding-left: 9px; border-left: 2px solid var(--line); color: var(--ink); font: 13px/1.5 var(--serif); overflow-wrap: anywhere; white-space: pre-wrap; }
+.chat-message.is-mine .chat-text { border-left-color: var(--accent-line); }
+.chat-form { display: flex; gap: 6px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.chat-form input { min-width: 0; flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--glass); color: var(--ink); font: 13px var(--serif); }
+.chat-form input:focus { border-color: var(--accent); outline: none; }
+.chat-send { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--accent-line); border-radius: 4px; background: var(--accent-soft); color: var(--accent-strong); cursor: pointer; }
+.chat-send:hover { border-color: var(--accent); }
+.chat-send .icon { width: 15px; height: 15px; }
+.chat-feedback { min-height: 0; margin: 4px 0 0; color: var(--warm); font: 9px var(--mono); }
+.chat-feedback:empty { display: none; }
+
+/* ---------- reações nas mesas ---------- */
+.seat-react { width: 26px; display: grid; place-items: center; padding: 0; }
+.seat-react .icon { width: 14px; height: 14px; }
+.reaction-picker { position: absolute; z-index: 5; top: 50px; right: 12px; display: flex; gap: 2px; padding: 4px; border: 1px solid var(--accent-line); border-radius: 20px; background: var(--surface); box-shadow: 0 8px 22px color-mix(in srgb, var(--shadow) 45%, transparent); animation: reaction-pop .16s ease-out both; }
+.reaction-option { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; font-size: 17px; line-height: 1; transition: transform .12s ease, background .12s ease; }
+.reaction-option:hover, .reaction-option:focus-visible { background: var(--accent-soft); outline: none; transform: scale(1.18); }
+.reaction-float { position: absolute; z-index: 4; left: var(--reaction-x, 50%); bottom: 34px; display: flex; flex-direction: column; align-items: center; gap: 1px; pointer-events: none; animation: reaction-float 2.4s cubic-bezier(.25,.8,.35,1) both; }
+.reaction-emoji { font-size: 30px; line-height: 1; filter: drop-shadow(0 4px 6px #0006); }
+.reaction-from { max-width: 90px; overflow: hidden; padding: 1px 6px; border-radius: 8px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--muted); font: 8px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+@keyframes reaction-pop { from { opacity: 0; transform: translateY(-4px) scale(.96); } }
+@keyframes reaction-float {
+  0% { opacity: 0; transform: translate(-50%, 12px) scale(.6); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  35% { transform: translate(calc(-50% + 8px * var(--reaction-sway, 1)), -38px) scale(1); }
+  65% { opacity: 1; transform: translate(calc(-50% - 8px * var(--reaction-sway, 1)), -82px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -128px) scale(.92); }
+}
+/* Sem animações: a reação só aparece e some. */
+html.reduce-motion .reaction-float { animation: reaction-still 2.4s steps(1, end) both !important; animation-duration: 2.4s !important; transform: translateX(-50%); }
+@keyframes reaction-still { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }

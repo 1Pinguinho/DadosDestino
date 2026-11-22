@@ -12,6 +12,9 @@ COMO JOGAR
 A engrenagem no topo troca idioma, tema, zoom, cores da mesa e dos dados, som e volume.
 Tudo fica salvo em config/preferencias.json. "Restaurar padrões" volta ao início.
 
+Na aba "Chat", ao lado do histórico, a mesa conversa. O botão de carinha na mesa de
+outro jogador manda uma reação que aparece, flutua e some.
+
 Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como
 mudar textos, cores e limites das salas, leia docs\COMO-FUNCIONA.md.
 
@@ -30,5 +33,8 @@ HOW TO PLAY
 
 The gear at the top changes language, theme, zoom, table and dice colors, sound and volume.
 Everything is saved in config/preferencias.json. "Restore defaults" resets it.
+
+The "Chat" tab, next to the history, lets the table talk. The smiley button on another
+player's table sends a reaction that pops up, floats and fades.
 
 Keep all folders together with the .exe. See docs\COMO-FUNCIONA.md for details.

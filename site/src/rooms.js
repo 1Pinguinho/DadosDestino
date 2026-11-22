@@ -626,6 +626,10 @@ function renderRoom(room) {
   updateRollControls(room);
   updateHostChip();
   window.dispatchEvent(new CustomEvent('room-state', { detail: room }));
+  // Só a sala completa (ao entrar ou reconectar) traz a conversa guardada.
+  if (Array.isArray(room.chat)) {
+    window.dispatchEvent(new CustomEvent('room-chat-history', { detail: room.chat }));
+  }
 }
 
 // Volta para o lobby (saiu, foi removido ou a sala acabou) e esquece a vaga.
@@ -832,12 +836,23 @@ connection.on('RoomUpdated', (roster) => {
       players: roster.players,
       spectators: roster.spectators,
       isMaster: Boolean(me?.isMaster),
+      // A lista da sala não traz rolagens nem conversa: a mesa e o chat mantêm o que já mostram.
+      rolls: [],
+      chat: undefined,
     });
   }
 });
 
 connection.on('ReceiveRoll', (roll) => {
   window.dispatchEvent(new CustomEvent('room-shared-roll', { detail: roll }));
+});
+
+connection.on('ChatMessage', (message) => {
+  window.dispatchEvent(new CustomEvent('room-chat', { detail: message }));
+});
+
+connection.on('Reaction', (reaction) => {
+  window.dispatchEvent(new CustomEvent('room-reaction', { detail: reaction }));
 });
 
 // O mestre tirou esta pessoa da sala.
@@ -923,6 +938,10 @@ export function createRoomManager({ onRoomRoll, onRoomHistory, onRoomState }) {
     isSpectator: () => Boolean(activeRoom?.isSpectator),
     shareRoll: (roll) => (activeRoom && !activeRoom.isSpectator
       ? connection.invoke('ShareRoll', roll)
+      : Promise.resolve()),
+    sendChat: (text) => (activeRoom ? connection.invoke('SendChat', text) : Promise.reject(new Error('NOT_IN_ROOM'))),
+    sendReaction: (targetPlayerId, emoji) => (activeRoom
+      ? connection.invoke('SendReaction', targetPlayerId, emoji)
       : Promise.resolve()),
   };
 }

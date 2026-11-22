@@ -10,6 +10,12 @@ public sealed class TableHub : Hub
 {
     private const int MaxRollHistory = 20;
     private const int MaxRollDice = 10;
+    private const int MaxChatLength = 500;
+    private const int MaxChatHistory = 200;
+    private static readonly TimeSpan ReactionCooldown = TimeSpan.FromSeconds(1);
+
+    // Reações que dá para mandar na mesa de outro jogador (o site tem a mesma lista).
+    public static readonly string[] Reactions = { "😂", "😮", "🔥", "💀", "👏", "❤️", "😱", "🎲" };
 
     // Cores que um jogador pode dar à própria mesa e aos dados (o site tem os mesmos nomes).
     public static readonly string[] PlayerColors =
@@ -305,6 +311,76 @@ public sealed class TableHub : Hub
         }
     }
 
+    // Chat da sala: jogadores e espectadores. Fica guardado (as últimas MaxChatHistory)
+    // enquanto a sala existir, para quem sai e volta continuar vendo a conversa.
+    public async Task SendChat(string text)
+    {
+        var message = (text ?? string.Empty).Trim();
+        if (message.Length == 0 || message.Length > MaxChatLength)
+        {
+            throw new HubException("INVALID_MESSAGE");
+        }
+        var (code, playerId) = CurrentSeat();
+        ChatMessage chat;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room)
+                || !room.Players.TryGetValue(playerId, out var actor)
+                || actor.ConnectionId != Context.ConnectionId)
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            chat = new ChatMessage(
+                Guid.NewGuid().ToString("N"),
+                actor.Id,
+                actor.Name,
+                actor.IsSpectator ? string.Empty : actor.Color,
+                message,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            room.Chat.Add(chat);
+            if (room.Chat.Count > MaxChatHistory)
+            {
+                room.Chat.RemoveAt(0);
+            }
+            room.LastActivityUtc = DateTime.UtcNow;
+        }
+        await Clients.Group(code).SendAsync("ChatMessage", chat);
+    }
+
+    // Reação rápida na mesa de um jogador: aparece, flutua e some para todos.
+    // Uma por segundo por pessoa; reações a mais são ignoradas sem erro.
+    public async Task SendReaction(string targetPlayerId, string emoji)
+    {
+        if (string.IsNullOrWhiteSpace(targetPlayerId) || targetPlayerId.Length > 64
+            || emoji is null || !Reactions.Contains(emoji))
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
+        var (code, playerId) = CurrentSeat();
+        TableReaction reaction;
+        lock (RoomsLock)
+        {
+            if (!Rooms.TryGetValue(code, out var room)
+                || !room.Players.TryGetValue(playerId, out var actor)
+                || actor.ConnectionId != Context.ConnectionId)
+            {
+                throw new HubException("NOT_IN_ROOM");
+            }
+            if (!room.Players.TryGetValue(targetPlayerId, out var target) || target.IsSpectator)
+            {
+                throw new HubException("TARGET_UNAVAILABLE");
+            }
+            var now = DateTime.UtcNow;
+            if (now - actor.LastReactionUtc < ReactionCooldown)
+            {
+                return;
+            }
+            actor.LastReactionUtc = now;
+            reaction = new TableReaction(target.Id, emoji, actor.Name);
+        }
+        await Clients.Group(code).SendAsync("Reaction", reaction);
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         await LeaveCurrentRoom(false);
@@ -574,7 +650,8 @@ public sealed class TableHub : Hub
             viewer.IsSpectator,
             players,
             Spectators(room),
-            visibleRolls);
+            visibleRolls,
+            room.Chat.ToArray());
     }
 
     private RoomRoster CreateRoster(string code)
@@ -646,6 +723,7 @@ public sealed class TableHub : Hub
         public Dictionary<string, PlayerState> Players { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, string> ConnectionPlayers { get; } = new(StringComparer.Ordinal);
         public List<SharedRoll> Rolls { get; } = new();
+        public List<ChatMessage> Chat { get; } = new();
         public string Name { get; set; } = string.Empty;
         public int MaxPlayers { get; set; } = 8;
         public bool IsPublic { get; set; }
@@ -669,5 +747,6 @@ public sealed class TableHub : Hub
         public string? ConnectionId { get; set; }
         public DateTime JoinedAtUtc { get; init; }
         public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
+        public DateTime LastReactionUtc { get; set; } = DateTime.MinValue;
     }
 }

@@ -8,6 +8,8 @@ import { diceColorValue, getSettings, initSettings } from './settings.js';
 import { playLand, playOutcome } from './sound.js';
 import { initShortcuts } from './shortcuts.js';
 import { initTitlebar } from './titlebar.js';
+import { initChat } from './chat.js';
+import { initReactions } from './reactions.js';
 
 initSettings();
 initTitlebar();
@@ -30,6 +32,7 @@ const rollButton = document.querySelector('.roll-button');
 const workspace = document.querySelector('.workspace');
 let selectedSides = 20;
 let roomManager;
+let reactions = null;
 let focusedPlayerId = '';
 let partyState = { code: '', myPlayerId: '', isMaster: false, players: [], spectators: [], rolls: [] };
 let feedbackKey = '';
@@ -137,7 +140,9 @@ function updateSeat(entry, player, index, room, lastRoll) {
 
   // Botões: focar (todos) e rolar aqui (quem pode rolar nessa mesa).
   const canRollHere = !room.isSpectator && (room.isMaster || player.id === room.myPlayerId);
-  const actionsKey = `${canRollHere}`;
+  // Reagir: na mesa dos outros, para quem está numa sala.
+  const canReact = Boolean(reactions && room.code && player.id !== room.myPlayerId);
+  const actionsKey = `${canRollHere}:${canReact}`;
   if (entry.actionsKey !== actionsKey) {
     entry.actionsKey = actionsKey;
     const focusButton = document.createElement('button');
@@ -147,7 +152,7 @@ function updateSeat(entry, player, index, room, lastRoll) {
       focusedPlayerId = focusedPlayerId === player.id ? '' : player.id;
       updateTableFocus();
     });
-    const buttons = [focusButton];
+    const buttons = canReact ? [reactions.button(player.id, entry.seat), focusButton] : [focusButton];
     if (canRollHere) {
       const rollHereButton = document.createElement('button');
       rollHereButton.type = 'button';
@@ -188,8 +193,22 @@ function removeSeat(playerId) {
   }
 }
 
+// A última rolagem de cada mesa. As atualizações da sala (alguém entrou, voltou,
+// trocou de cor) não trazem rolagens, então o que já está na mesa é mantido; as que
+// chegam depois (ao vivo ou na lista completa ao entrar) substituem as anteriores.
+function mergeTableRolls(current, incoming) {
+  const latest = new Map();
+  for (const roll of [...current, ...incoming]) {
+    if (roll && roll.id && roll.targetPlayerId) {
+      latest.set(roll.targetPlayerId, roll);
+    }
+  }
+  return [...latest.values()];
+}
+
 function renderPartyTable(room) {
-  if (partyState.code !== room.code) {
+  const sameRoom = partyState.code === room.code;
+  if (!sameRoom) {
     // Ao entrar numa sala, mantém só o histórico salvo dessa sala; ao sair, limpa.
     // Na abertura da página (sem sala ainda) o histórico salvo não é tocado.
     history = room.code ? history.filter((entry) => entry.roomCode === room.code) : [];
@@ -202,13 +221,14 @@ function renderPartyTable(room) {
     localRollsInFlight.clear();
     rollButton.classList.remove('is-rolling');
   }
-  partyState = room;
+  const players = Array.isArray(room.players) ? room.players : [];
+  const spectators = Array.isArray(room.spectators) ? room.spectators : [];
+  const rolls = mergeTableRolls(sameRoom ? partyState.rolls : [], Array.isArray(room.rolls) ? room.rolls : [])
+    .filter((roll) => players.some((player) => player.id === roll.targetPlayerId));
+  partyState = { ...room, rolls };
   workspace.classList.toggle('in-room', Boolean(room.code));
   workspace.classList.toggle('is-spectator', Boolean(room.isSpectator));
   document.querySelector('#room-heading').textContent = room.name || t('lobby.title1');
-  const players = Array.isArray(room.players) ? room.players : [];
-  const spectators = Array.isArray(room.spectators) ? room.spectators : [];
-  const rolls = Array.isArray(room.rolls) ? room.rolls : [];
   if (focusedPlayerId && !players.some((player) => player.id === focusedPlayerId)) {
     focusedPlayerId = '';
   }
@@ -484,6 +504,7 @@ window.addEventListener('languagechange-app', () => {
   renderHistory();
   for (const entry of seats.values()) {
     entry.shownRollId = null;
+    entry.actionsKey = '';
   }
   renderPartyTable(partyState);
   if (feedbackKey) {
@@ -502,6 +523,11 @@ roomManager = createRoomManager({
   },
   onRoomHistory: (rolls) => mergeHistory(rolls),
   onRoomState: (room) => renderPartyTable(room),
+});
+initChat(roomManager);
+reactions = initReactions({
+  sendReaction: (targetPlayerId, emoji) => roomManager.sendReaction(targetPlayerId, emoji),
+  seatFor: (playerId) => seats.get(playerId)?.seat || null,
 });
 renderPartyTable(partyState);
 

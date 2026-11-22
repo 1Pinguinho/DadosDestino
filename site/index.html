@@ -24,6 +24,8 @@
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></symbol>
       <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14" /><path d="M21 3 14.5 21l-4.5-7-7-4.5Z" /></symbol>
+      <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" /><path d="M9 9.5h.01M15 9.5h.01" /></symbol>
     </svg>
 
     <!-- Barra de título do app (só aparece dentro do app; a do Windows fica escondida) -->
@@ -384,18 +386,32 @@
             <p id="room-feedback" class="room-feedback" role="status" aria-live="polite"></p>
           </section>
 
-          <aside class="history" aria-labelledby="history-title">
+          <aside class="history" aria-labelledby="side-tab-history">
             <div class="history-heading">
               <div>
                 <p class="chapter" data-i18n="history.chapter">REGISTRO DE CAMPANHA</p>
-                <h2 id="history-title" data-i18n="history.title">Histórico</h2>
+                <div class="side-tabs" role="tablist" data-i18n-aria="side.tabs">
+                  <button id="side-tab-history" class="side-tab" type="button" role="tab" aria-selected="true" aria-controls="history-pane" data-side-tab="history"><span data-i18n="history.title">Histórico</span></button>
+                  <button id="side-tab-chat" class="side-tab" type="button" role="tab" aria-selected="false" aria-controls="chat-pane" data-side-tab="chat" hidden><span data-i18n="chat.title">Chat</span><span id="chat-unread" class="unread-dot" hidden></span></button>
+                </div>
               </div>
               <button id="clear-history" class="clear-button" type="button" data-i18n="history.clear" data-i18n-aria="history.clearLabel">LIMPAR</button>
             </div>
             <div class="history-rule"></div>
-            <ol id="history-list" class="history-list" data-i18n-aria="history.list"></ol>
-            <p id="history-empty" class="history-empty" data-i18n="history.empty">As rolagens desta sessão vão aparecer aqui.</p>
-            <div class="history-footer"><span class="status-dot"></span> <span id="history-count"></span></div>
+            <div id="history-pane" class="side-pane" role="tabpanel" aria-labelledby="side-tab-history">
+              <ol id="history-list" class="history-list" data-i18n-aria="history.list"></ol>
+              <p id="history-empty" class="history-empty" data-i18n="history.empty">As rolagens desta sessão vão aparecer aqui.</p>
+              <div class="history-footer"><span class="status-dot"></span> <span id="history-count"></span></div>
+            </div>
+            <div id="chat-pane" class="side-pane chat-pane" role="tabpanel" aria-labelledby="side-tab-chat" hidden>
+              <ol id="chat-list" class="chat-list" data-i18n-aria="chat.list"></ol>
+              <p id="chat-empty" class="history-empty" data-i18n="chat.empty">Ninguém falou nada ainda. Diga oi para a mesa!</p>
+              <form id="chat-form" class="chat-form">
+                <input id="chat-input" type="text" maxlength="500" autocomplete="off" data-i18n-placeholder="chat.placeholder" data-i18n-aria="chat.placeholder" />
+                <button class="chat-send" type="submit" data-i18n-aria="chat.send" data-i18n-title="chat.send"><svg class="icon"><use href="#i-send" /></svg></button>
+              </form>
+              <p id="chat-feedback" class="chat-feedback" role="status" aria-live="polite"></p>
+            </div>
           </aside>
         </div>
       </main>

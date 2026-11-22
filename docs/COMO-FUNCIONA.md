@@ -94,6 +94,10 @@ padrão, menos o idioma e os atalhos.
   tira da sala; **Remover e bloquear** também impede a volta dela (pelo IP) àquela sala.
 - **Voltar para a vaga:** quem fecha o navegador sem querer e abre o mesmo link de novo volta
   como a mesma pessoa, na mesma mesa.
+- **Chat:** fica na aba **Chat**, ao lado do histórico. Mensagens de até 500 caracteres; as
+  últimas 200 ficam guardadas no computador do anfitrião enquanto a sala existir.
+- **Reações:** o botão com a carinha, na mesa de outro jogador, abre 8 emojis. A reação
+  aparece só por alguns segundos e não fica guardada (uma por segundo por pessoa).
 
 ## Mudando textos, cores e visual
 
