@@ -21,6 +21,7 @@ mestre, mesas salvas que reabrem com o mesmo código em "Minhas mesas".
 
 Combate: o mestre clica em "Iniciar combate" na mesa. Todos rolam iniciativa e, na sua
 vez, você escolhe o alvo e rola o ataque; a faixa de combate diz o que fazer em cada passo.
+O mestre tem a aba "Escudo": testes às cegas, chefes prontos e notas secretas.
 
 Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como
 mudar textos, cores e limites das salas, leia docs\COMO-FUNCIONA.md.
@@ -50,5 +51,6 @@ tab) and, for the GM, saved tables that reopen with the same code in "My tables"
 
 Combat: the GM clicks "Start combat" on the table. Everyone rolls initiative and, on your
 turn, you pick a target and roll the attack; the combat bar tells you what to do at each step.
+The GM has the "Screen" tab: blind tests, saved bosses and secret notes.
 
 Keep all folders together with the .exe. See docs\COMO-FUNCIONA.md for details.

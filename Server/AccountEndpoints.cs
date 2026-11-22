@@ -81,6 +81,29 @@ public static class AccountEndpoints
             return Results.Json(saved, AccountStore.Json);
         });
 
+        // Chefes prontos do mestre (aba Escudo).
+        app.MapGet("/api/account/bosses", (HttpContext context) =>
+            store.Resolve(Token(context)) is { } account ? Results.Json(store.Bosses(account.Id), AccountStore.Json) : Unauthorized());
+
+        app.MapPut("/api/account/bosses", async (HttpContext context) =>
+        {
+            if (store.Resolve(Token(context)) is not { } account)
+            {
+                return Unauthorized();
+            }
+            var body = await ReadBody(context, 128 * 1024);
+            List<BossTemplate>? bosses;
+            try
+            {
+                bosses = body is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<BossTemplate>>(body, AccountStore.Json);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                bosses = null;
+            }
+            return bosses is null ? Error("INVALID_REQUEST") : Results.Json(store.SaveBosses(account.Id, bosses), AccountStore.Json);
+        });
+
         // Muda HP, EA ou San atual na mão (ex.: "Recuperei 10 de HP" ou corrigir um valor).
         app.MapPost("/api/account/status", async (StatusRequest request, HttpContext context) =>
         {

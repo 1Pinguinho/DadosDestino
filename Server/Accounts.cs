@@ -312,6 +312,25 @@ public sealed class AccountStore
         }
     }
 
+    // Biblioteca de chefes do mestre.
+    public List<BossTemplate> Bosses(string accountId)
+    {
+        lock (gate)
+        {
+            return BossTemplate.Normalize(ReadJson<List<BossTemplate>>(Path.Combine(folder, accountId, "chefes.json")));
+        }
+    }
+
+    public List<BossTemplate> SaveBosses(string accountId, List<BossTemplate>? bosses)
+    {
+        var clean = BossTemplate.Normalize(bosses);
+        lock (gate)
+        {
+            WriteAtomic(Path.Combine(AccountFolder(accountId), "chefes.json"), JsonSerializer.SerializeToUtf8Bytes(clean, Json));
+        }
+        return clean;
+    }
+
     // Resumo da ficha ativa para a mesa (barras de HP e EA), sem copiar o documento todo.
     public SheetStatus? Status(string accountId)
     {

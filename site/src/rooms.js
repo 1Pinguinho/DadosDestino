@@ -769,6 +769,9 @@ function renderRoom(room) {
   if (Array.isArray(room.notes)) {
     window.dispatchEvent(new CustomEvent('room-notes', { detail: room.notes }));
   }
+  if (Array.isArray(room.blindRequests)) {
+    window.dispatchEvent(new CustomEvent('room-blind-requests', { detail: { requests: room.blindRequests, replace: true } }));
+  }
   // A sala completa traz o combate (null quando não há).
   if (room.combat !== undefined) {
     window.dispatchEvent(new CustomEvent('room-combat', { detail: room.combat }));
@@ -983,6 +986,7 @@ connection.on('RoomUpdated', (roster) => {
       rolls: [],
       chat: undefined,
       combat: undefined,
+      blindRequests: undefined,
     });
   }
 });
@@ -997,6 +1001,10 @@ connection.on('ChatMessage', (message) => {
 
 connection.on('Reaction', (reaction) => {
   window.dispatchEvent(new CustomEvent('room-reaction', { detail: reaction }));
+});
+
+connection.on('BlindRequest', (request) => {
+  window.dispatchEvent(new CustomEvent('room-blind-requests', { detail: { requests: [request], replace: false } }));
 });
 
 connection.on('CombatUpdated', (combat) => {

@@ -15,6 +15,9 @@ import { initSheet } from './sheet.js';
 import { initNotes } from './notes.js';
 import { describeEffect, initRollKind } from './rollkind.js';
 import { initCombat } from './combat.js';
+import { initShield } from './shield.js';
+import { skillTest } from './sheet.js';
+import { playTurn } from './sound.js';
 
 initSettings();
 initTitlebar();
@@ -132,9 +135,12 @@ function createSeat(playerId) {
 }
 
 function showSeatRoll(entry, roll) {
-  entry.waiting.hidden = Boolean(roll);
-  entry.waiting.textContent = t('table.waiting');
-  entry.stage.hidden = !roll;
+  // Às cegas para quem não pode ver: sem dados, só "?".
+  const hidden = Boolean(roll?.hidden);
+  entry.waiting.hidden = Boolean(roll) && !hidden;
+  entry.waiting.textContent = hidden ? t('blind.secret') : t('table.waiting');
+  entry.waiting.classList.toggle('is-blind', hidden);
+  entry.stage.hidden = !roll || hidden;
   entry.notation.textContent = roll ? roll.notation : '';
   const effect = roll ? describeEffect(roll, partyState.players || []) : '';
   entry.visibility.textContent = [effect, roll?.isPrivate ? t('table.private') : ''].filter(Boolean).join(' · ');
@@ -207,7 +213,7 @@ function updateSeat(entry, player, index, room, lastRoll) {
     const rollId = lastRoll?.id || '';
     if (entry.shownRollId !== rollId) {
       entry.shownRollId = rollId;
-      entry.animator.show(lastRoll ? animationSource(lastRoll) : null);
+      entry.animator.show(lastRoll && !lastRoll.hidden ? animationSource(lastRoll) : null);
     }
     showSeatRoll(entry, lastRoll);
   }
@@ -350,6 +356,12 @@ function animateOnSeat(roll, onDone) {
   }
   entry.shownRollId = roll.id;
   showSeatRoll(entry, roll);
+  if (roll.hidden) {
+    entry.animator.show(null);
+    flashSeat(entry);
+    onDone();
+    return;
+  }
   entry.animator.play(animationSource(roll), () => {
     flashSeat(entry);
     onDone();
@@ -419,7 +431,7 @@ function renderHistory() {
     const effect = describeEffect(entry, partyState.players || []);
     detail.textContent = `${entry.isPrivate ? `${t('history.private')} · ` : ''}${author ? `${author} · ` : ''}${effect ? `${effect} · ` : ''}${entry.output}`;
     total.className = 'history-total';
-    total.textContent = String(entry.total);
+    total.textContent = entry.hidden ? '?' : String(entry.total);
     time.className = 'history-time';
     time.dateTime = date.toISOString();
     time.textContent = formatTime(date);
@@ -451,11 +463,40 @@ function recordRoll(localRoll) {
   renderPartyTable({ ...partyState, rolls: [...otherRolls, roll] });
 }
 
+// Vantagem / desvantagem: troca o primeiro 1d20 da rolagem por 2d20kh1 (fica com o
+// maior) ou 2d20kl1 (fica com o menor). Volta para "Normal" depois de cada rolagem.
+const advantageGroup = document.querySelector('#roll-advantage');
+let advantage = 'none';
+function setAdvantage(value) {
+  advantage = value;
+  for (const button of advantageGroup.querySelectorAll('[data-advantage]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.advantage === value));
+  }
+}
+advantageGroup.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-advantage]');
+  if (button) {
+    setAdvantage(button.dataset.advantage === advantage ? 'none' : button.dataset.advantage);
+  }
+});
+
+function withAdvantage(notation) {
+  if (advantage === 'none' || !notation) {
+    return notation;
+  }
+  const changed = notation.replace(/(^|[^\dA-Za-z%])1?d20(?![\d%])(?![a-zA-Z!])/i, `$12d20${advantage}1`);
+  return changed === notation ? null : changed;
+}
+
 function rollDice(notation, override = null) {
   if (roomManager?.isSpectator()) {
     return;
   }
-  const cleanedNotation = notation.trim();
+  const cleanedNotation = withAdvantage(notation.trim());
+  if (cleanedNotation === null) {
+    showFeedback('advantage.noD20');
+    return;
+  }
   if (!cleanedNotation) {
     showFeedback('roller.empty');
     notationInput.focus();
@@ -485,8 +526,14 @@ function rollDice(notation, override = null) {
     return;
   }
   const rollContext = roomManager?.getRollContext() || { targetPlayerId: '', isPrivate: false };
+  if (effect.kind === 'blind') {
+    // Teste às cegas: sempre na própria mesa e nunca privado (quem vê é o servidor que decide).
+    rollContext.targetPlayerId = partyState.myPlayerId;
+    rollContext.isPrivate = false;
+  }
   const entry = {
     kind: effect.kind,
+    label: effect.label || null,
     recoverStat: effect.recoverStat || null,
     damageType: effect.damageType || null,
     manaCost: effect.manaCost || 0,
@@ -507,8 +554,29 @@ function rollDice(notation, override = null) {
   };
   showFeedback();
   rollKind?.reset();
-  rollButton.classList.add('is-rolling');
+  setAdvantage('none');
   localRollsInFlight.add(entry.id);
+  const reportNotSent = (error) => {
+    feedbackKey = '';
+    feedback.textContent = errorCode(error)
+      ? t('roller.notSent', { reason: errorText(error, 'roller.localOnly') })
+      : t('roller.localOnly');
+  };
+  if (effect.hideFromMe) {
+    // Às cegas sem ver: o resultado vai só para o mestre; aqui aparece "?".
+    roomManager?.shareRoll(entry).catch(reportNotSent);
+    showFeedback('blind.sentHidden');
+    const masked = { ...entry, notation: effect.label || '?', total: 0, output: '', dice: [], extraDice: 0, hidden: true };
+    const seat = seats.get(entry.targetPlayerId);
+    if (seat) {
+      seat.shownRollId = entry.id;
+      showSeatRoll(seat, masked);
+      seat.animator.show(null);
+    }
+    recordRoll(masked);
+    return;
+  }
+  rollButton.classList.add('is-rolling');
   // Vai para a sala na hora: todos veem os dados rolarem na mesa ao mesmo tempo.
   roomManager?.shareRoll(entry).catch((error) => {
     feedbackKey = '';
@@ -648,6 +716,7 @@ function selectRoomView(view) {
   }
   document.querySelector('#sheet-view').hidden = view !== 'sheet';
   document.querySelector('#notes-view').hidden = view !== 'notes';
+  document.querySelector('#shield-view').hidden = view !== 'shield';
 }
 roomViews.addEventListener('click', (event) => {
   const button = event.target.closest('[data-view]');
@@ -661,6 +730,52 @@ window.addEventListener('room-state', (event) => {
   }
 });
 selectRoomView('table');
+
+initShield({ manager: roomManager });
+
+// Testes às cegas que o mestre pediu: um cartão por pedido, acima do rolador.
+const blindBox = document.querySelector('#blind-requests');
+let blindRequests = [];
+function renderBlindRequests() {
+  blindBox.hidden = blindRequests.length === 0;
+  blindBox.replaceChildren(...blindRequests.map((request) => {
+    const sheet = sheets.active();
+    const notation = request.skillId
+      ? `1d20${(() => { const value = sheet ? skillTest(sheet, request.skillId) : 0; return value ? (value > 0 ? `+${value}` : String(value)) : ''; })()}`
+      : request.notation;
+    const card = document.createElement('div');
+    const text = document.createElement('p');
+    const go = document.createElement('button');
+    card.className = 'blind-request';
+    text.textContent = t(request.playerSees ? 'blind.request' : 'blind.requestHidden', { label: request.label });
+    go.type = 'button';
+    go.className = 'room-button room-button-primary';
+    go.textContent = t('combat.rollButton', { what: request.label, notation });
+    go.addEventListener('click', () => {
+      blindRequests = blindRequests.filter((candidate) => candidate.id !== request.id);
+      renderBlindRequests();
+      notationInput.value = notation;
+      rollDice(notation, { kind: 'blind', effectTargetId: request.id, label: request.label, hideFromMe: !request.playerSees });
+    });
+    card.append(text, go);
+    return card;
+  }));
+}
+window.addEventListener('room-blind-requests', (event) => {
+  const { requests = [], replace = false } = event.detail || {};
+  blindRequests = replace ? [...requests] : [...blindRequests.filter((old) => !requests.some((request) => request.id === old.id)), ...requests];
+  renderBlindRequests();
+  if (!replace && requests.length) {
+    playTurn();
+  }
+});
+window.addEventListener('room-state', (event) => {
+  if (!event.detail?.code) {
+    blindRequests = [];
+    renderBlindRequests();
+  }
+});
+sheets.onChange(renderBlindRequests);
 
 // Rolagens rápidas da ficha ativa, no rolador. A magia espera a EA gasta antes de rolar.
 const sheetRollsBlock = document.querySelector('#sheet-rolls-block');

@@ -70,7 +70,8 @@ public sealed record RoomSnapshot(
     IReadOnlyList<ChatMessage> Chat,
     IReadOnlyList<RoomNote> Notes,
     bool IsSaved,
-    CombatView? Combat);
+    CombatView? Combat,
+    IReadOnlyList<BlindRequestView> BlindRequests);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
 public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp);
@@ -96,7 +97,15 @@ public sealed record RollDie(int Sides, double Value, double Natural, bool Used)
 // EffectTargetId: em quem a rolagem age (poção em outro jogador, ataque, socorro).
 // Applied: quanto foi aplicado de verdade na ficha (ex.: cura limitada pela vida máxima).
 public sealed record SharedRoll(string Id, string PlayerId, string Player, string CharacterName, string TargetPlayerId, string Notation, double Total, string Output, long Timestamp, bool IsPrivate, IReadOnlyList<RollDie> Dice, int ExtraDice, string DiceColor, string DiceStyle,
-    string Kind, string? EffectTargetId, string? RecoverStat, string? DamageType, int ManaCost, int? Applied);
+    string Kind, string? EffectTargetId, string? RecoverStat, string? DamageType, int ManaCost, int? Applied,
+    string? Label = null, bool BlindSees = false, bool Hidden = false);
+
+// Teste às cegas pedido pelo mestre (Label: o nome do teste, ex.: "Percepção").
+// SkillId: perícia da ficha do jogador; Notation: rolagem livre quando não é perícia.
+// PlayerSees: se o próprio jogador vê o resultado (os outros nunca veem).
+public sealed record BlindRollRequest(string PlayerId, string Label, string? SkillId, string? Notation, bool PlayerSees);
+
+public sealed record BlindRequestView(string Id, string Label, string? SkillId, string? Notation, bool PlayerSees);
 
 // DiceColor: a cor dos dados de quem rolou ("classic" = uma cor por tipo de dado).
 // DiceStyle: o modelo dos dados (formato e símbolos), um da lista em TableHub.DiceStyles.

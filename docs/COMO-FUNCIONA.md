@@ -21,6 +21,7 @@ DadosDestino/
 │   │   ├── notes.js           notas da mesa
 │   │   ├── rollkind.js        tipo da rolagem (dano, magia, poção)
 │   │   ├── combat.js          faixa de combate: turnos, alvo, socorro e controles do mestre
+│   │   ├── shield.js          escudo do mestre: teste às cegas, chefes prontos e notas secretas
 │   │   ├── sound.js           som dos dados (gerado na hora, sem arquivos de áudio)
 │   │   ├── titlebar.js        barra de título do app, na cor do tema
 │   │   ├── i18n.js            troca de idioma
@@ -105,6 +106,9 @@ padrão, menos o idioma e os atalhos.
   como a mesma pessoa, na mesma mesa.
 - **Chat:** fica na aba **Chat**, ao lado do histórico. Mensagens de até 500 caracteres; as
   últimas 200 ficam guardadas no computador do anfitrião enquanto a sala existir.
+- **Escudo do mestre:** aba **Escudo**, só para o mestre. Teste às cegas (o servidor manda o
+  resultado inteiro só para o mestre e, se ele marcar, para quem rolou; os outros recebem "?"),
+  chefes prontos (em `dados/contas/<id>/chefes.json`) e notas secretas (no arquivo da mesa salva).
 - **Combate:** o mestre inicia na mesa (**Iniciar combate**). A faixa de combate mostra a rodada,
   a ordem e o que fazer agora. Na sua vez, a próxima rolagem conta como o passo do combate
   (iniciativa, ataque, Reflexos ou Medicina); o tipo escolhido no rolador (dano, poção) tem

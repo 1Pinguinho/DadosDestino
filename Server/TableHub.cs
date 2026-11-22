@@ -48,7 +48,7 @@ public sealed partial class TableHub : Hub
     private readonly IHubContext<TableHub> hubContext;
 
     // Tipos de rolagem que o site pode mandar (ver SharedRoll.Kind).
-    private static readonly string[] RollKinds = { "normal", "recovery", "damage", "attack", "reflex", "initiative", "medicine" };
+    private static readonly string[] RollKinds = { "normal", "recovery", "damage", "attack", "reflex", "initiative", "medicine", "blind" };
 
     public TableHub(ServerConfig config, IHubContext<TableHub> hubContext)
     {
@@ -261,6 +261,7 @@ public sealed partial class TableHub : Hub
                     AllowSpectators = saved.AllowSpectators && config.MaxSpectatorsPerRoom > 0,
                     OwnerAccountId = accountId,
                     Notes = saved.Notes ?? new(),
+                    MasterNotes = saved.MasterNotes ?? string.Empty,
                 });
             }
         }
@@ -376,6 +377,7 @@ public sealed partial class TableHub : Hub
             AllowSpectators = room.AllowSpectators,
             OwnerAccountId = room.OwnerAccountId,
             Notes = room.Notes.ToList(),
+            MasterNotes = room.MasterNotes,
         });
     }
 
@@ -505,6 +507,7 @@ public sealed partial class TableHub : Hub
         var manaCost = 0;
         int? applied = null;
         var combatChanged = false;
+        (string[] Full, bool PlayerSees)? blindRecipients = null;
         CombatView? combatView = null;
         lock (RoomsLock)
         {
@@ -578,6 +581,21 @@ public sealed partial class TableHub : Hub
                 }
             }
 
+            string? blindLabel = null;
+            var blindSees = false;
+            if (kind == "blind")
+            {
+                // Teste às cegas: só vale o pedido que o mestre fez para esta pessoa.
+                if (roll.IsPrivate || roll.EffectTargetId is null
+                    || !room.BlindRequests.TryGetValue(roll.EffectTargetId, out var request) || request.PlayerId != actor.Id)
+                {
+                    throw new HubException("NO_BLIND_REQUEST");
+                }
+                room.BlindRequests.Remove(roll.EffectTargetId);
+                blindLabel = request.Label;
+                blindSees = request.PlayerSees;
+            }
+
             if (ApplyCombatRoll(room, actor, roll, kind, changedAccounts))
             {
                 combatView = ViewOf(room);
@@ -604,7 +622,9 @@ public sealed partial class TableHub : Hub
                 recoverStat,
                 damageType,
                 manaCost,
-                applied);
+                applied,
+                blindLabel,
+                blindSees);
 
             room.Rolls.Add(sharedRoll);
             if (room.Rolls.Count > MaxRollHistory)
@@ -612,6 +632,10 @@ public sealed partial class TableHub : Hub
                 room.Rolls.RemoveAt(0);
             }
             room.LastActivityUtc = DateTime.UtcNow;
+            if (kind == "blind")
+            {
+                blindRecipients = BlindRecipients(room, actor, sharedRoll);
+            }
             if (roll.IsPrivate)
             {
                 privateRecipients = new[] { actor.ConnectionId, target.ConnectionId }
@@ -621,7 +645,13 @@ public sealed partial class TableHub : Hub
             }
         }
 
-        if (roll.IsPrivate)
+        if (blindRecipients is { } blind)
+        {
+            // Às cegas: o mestre (e o jogador, se o mestre deixou) veem tudo; os outros, só "?".
+            await Clients.Clients(blind.Full).SendAsync("ReceiveRoll", sharedRoll);
+            await Clients.GroupExcept(code, blind.Full).SendAsync("ReceiveRoll", Masked(sharedRoll));
+        }
+        else if (roll.IsPrivate)
         {
             await Clients.Clients(privateRecipients).SendAsync("ReceiveRoll", sharedRoll);
         }
@@ -978,7 +1008,8 @@ public sealed partial class TableHub : Hub
     private RoomSnapshot CreateSnapshot(string code, RoomState room, PlayerState viewer)
     {
         var visibleRolls = room.Rolls.Where(roll => !roll.IsPrivate
-            || viewer.IsMaster || roll.TargetPlayerId == viewer.Id).ToArray();
+            || viewer.IsMaster || roll.TargetPlayerId == viewer.Id)
+            .Select(roll => BlindFor(roll, viewer)).ToArray();
         var players = room.Players.Values.Where(player => !player.IsSpectator).OrderBy(player => player.JoinedAtUtc)
             .Select(player => ToRoomPlayer(player, visibleRolls.LastOrDefault(roll => roll.TargetPlayerId == player.Id))).ToArray();
         return new RoomSnapshot(
@@ -998,7 +1029,8 @@ public sealed partial class TableHub : Hub
             room.Chat.ToArray(),
             room.Notes.ToArray(),
             room.OwnerAccountId is not null,
-            ViewOf(room));
+            ViewOf(room),
+            room.BlindRequests.Where(pair => pair.Value.PlayerId == viewer.Id).Select(pair => pair.Value.View(pair.Key)).ToArray());
     }
 
     private static RoomPlayer ToRoomPlayer(PlayerState player, SharedRoll? lastRoll)
@@ -1091,6 +1123,9 @@ public sealed partial class TableHub : Hub
         public List<ChatMessage> Chat { get; } = new();
         public List<RoomNote> Notes { get; set; } = new();
         public CombatState? Combat { get; set; }
+        public string MasterNotes { get; set; } = string.Empty;
+        // Testes às cegas pedidos pelo mestre e ainda não rolados (id → pedido).
+        public Dictionary<string, BlindRequestState> BlindRequests { get; } = new(StringComparer.Ordinal);
         // Conta do mestre que criou a sala: com ela, a sala fica salva em disco.
         public string? OwnerAccountId { get; set; }
         public string Name { get; set; } = string.Empty;

@@ -304,11 +304,13 @@
         <nav id="room-views" class="room-views" role="tablist" data-i18n-aria="views.label">
           <button type="button" role="tab" aria-selected="true" data-view="table" data-i18n="views.table">Mesa</button>
           <button type="button" role="tab" aria-selected="false" data-view="sheet" data-i18n="views.sheet">Ficha</button>
+          <button type="button" role="tab" aria-selected="false" data-view="shield" id="shield-tab" hidden data-i18n="views.shield">Escudo</button>
           <button type="button" role="tab" aria-selected="false" data-view="notes"><span data-i18n="views.notes">Notas</span><span id="notes-count" class="view-count"></span></button>
         </nav>
 
         <section id="sheet-view" class="sheet-view" aria-labelledby="sheet-title" hidden></section>
         <section id="notes-view" class="notes-view" aria-labelledby="notes-title" hidden></section>
+        <section id="shield-view" class="notes-view shield-view" aria-labelledby="shield-title" hidden></section>
 
         <section class="party-table" aria-labelledby="table-title">
           <div class="table-head">
@@ -328,11 +330,17 @@
 
         <section class="roller" aria-labelledby="page-title">
           <p id="spectator-note" class="spectator-note" data-i18n="room.watching" hidden></p>
+          <div id="blind-requests" class="blind-requests" hidden></div>
           <form id="roll-form" class="roll-form">
             <label class="field-label" for="notation" data-i18n="roller.notation">NOTAÇÃO</label>
             <div class="notation-row">
               <input id="notation" name="notation" type="text" value="1d20" maxlength="120" autocomplete="off" spellcheck="false" aria-describedby="roll-feedback" />
               <button class="roll-button" type="submit"><span aria-hidden="true">✳</span> <b data-i18n="roller.roll">Rolar</b></button>
+            </div>
+            <div id="roll-advantage" class="roll-advantage" role="group" data-i18n-aria="advantage.label">
+              <button type="button" data-advantage="none" aria-pressed="true" data-i18n="advantage.none">Normal</button>
+              <button type="button" data-advantage="kh" aria-pressed="false" data-i18n="advantage.advantage">Vantagem</button>
+              <button type="button" data-advantage="kl" aria-pressed="false" data-i18n="advantage.disadvantage">Desvantagem</button>
             </div>
             <p id="roll-feedback" class="feedback" role="status" aria-live="polite"></p>
 

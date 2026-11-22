@@ -118,6 +118,9 @@ export function describeEffect(roll, players = []) {
     const amount = Number.isFinite(roll.applied) ? `+${roll.applied} ` : '';
     return target ? t('effect.potionOn', { amount, stat, name: target }) : t('effect.potion', { amount, stat });
   }
+  if (roll.kind === 'blind') {
+    return t(roll.hidden ? 'effect.blindHidden' : 'effect.blind', { label: roll.label || '' });
+  }
   if (['attack', 'reflex', 'initiative', 'medicine'].includes(roll.kind)) {
     return t(`effect.${roll.kind}`);
   }
