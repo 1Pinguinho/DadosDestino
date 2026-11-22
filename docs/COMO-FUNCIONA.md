@@ -22,7 +22,7 @@ DadosDestino/
 │   │   ├── rollkind.js        tipo da rolagem (dano, magia, poção)
 │   │   ├── combat.js          faixa de combate: turnos, alvo, socorro e controles do mestre
 │   │   ├── shield.js          escudo do mestre: teste às cegas, chefes prontos e notas secretas
-│   │   ├── ambient.js         trilha ambiente (sons gerados na hora; fogueira de site/audio, se houver)
+│   │   ├── ambient.js         trilha ambiente (sons gerados na hora)
 │   │   ├── systems.js         sistemas de ficha (Ordem, D&D, Tormenta, personalizado)
 │   │   ├── seatlook.js        visual da mesa: superfície, moldura, brasão, efeito e cores
 │   │   ├── sound.js           som dos dados (gerado na hora, sem arquivos de áudio)

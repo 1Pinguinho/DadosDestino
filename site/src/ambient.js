@@ -1,13 +1,9 @@
 // Trilha ambiente, tocando em ciclo. O mestre escolhe a cena e todos ouvem; cada pessoa
 // tem o próprio liga/desliga e volume (configurações). Cenas: chuva, chuva com trovões,
-// vento e fogueira. A fogueira usa a gravação em site/audio/fogueira.ogg quando ela
-// existe; sem o arquivo, é gerada na hora como as outras.
+// vento e fogueira. Tudo é gerado na hora pelo próprio app, sem arquivos de áudio.
 import { getSettings } from './settings.js';
 
 export const AMBIENT_SCENES = ['rain', 'storm', 'wind', 'fire'];
-const FIRE_RECORDING = '/audio/fogueira.ogg';
-let fireBuffer = null; // AudioBuffer, ou false se não existe
-let fireLoading = null;
 
 let context = null;
 let output = null;
@@ -105,6 +101,20 @@ function burst(ctx, destination, { frequency, type = 'bandpass', q = 1, peak, du
   source.start();
 }
 
+// Estalinho da fogueira: um clique de poucos milissegundos com brilho agudo.
+function crackle(ctx, destination, peak) {
+  const length = Math.max(8, Math.floor(ctx.sampleRate * (0.001 + Math.random() * 0.004)));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < length; index += 1) {
+    data[index] = (Math.random() * 2 - 1) * Math.exp(-index / (length / 4));
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(filter(ctx, 'bandpass', 2200 + Math.random() * 4500, 2.5)).connect(gain(ctx, peak * 3)).connect(destination);
+  source.start();
+}
+
 // Trovão: ronco grave de ruído marrom que cresce rápido e some devagar.
 function thunder(ctx, destination, peak) {
   const length = Math.floor(ctx.sampleRate * (2.5 + Math.random() * 2));
@@ -155,23 +165,46 @@ const BUILDERS = {
       setTimeout(() => thunder(ctx, bus, near ? 0.9 : 0.55), near ? 120 : 600 + Math.random() * 900);
     });
   },
+  // Fogueira: ronco grave que respira de forma irregular, o "sopro" das chamas, um chiado
+  // bem baixo, estalinhos que vêm sozinhos ou em rajadas e, de vez em quando, a madeira
+  // estalando mais forte.
   fire(ctx, bus, nodes, timers) {
-    // Gravação real, se o arquivo veio no pacote.
-    if (fireBuffer) {
-      const recording = ctx.createBufferSource();
-      recording.buffer = fireBuffer;
-      recording.loop = true;
-      recording.connect(gain(ctx, 1.4)).connect(bus);
-      recording.start(0, Math.random() * Math.max(0, fireBuffer.duration - 1));
-      nodes.push(recording);
-      return;
-    }
     const roar = noise(ctx, 'brown');
-    const roarGain = gain(ctx, 0.5);
-    roar.connect(filter(ctx, 'lowpass', 520)).connect(roarGain).connect(bus);
+    const roarGain = gain(ctx, 0.42);
+    roar.connect(filter(ctx, 'lowpass', 380)).connect(roarGain).connect(bus);
+    const flame = noise(ctx, 'pink');
+    const flameBand = filter(ctx, 'bandpass', 850, 0.6);
+    const flameGain = gain(ctx, 0.1);
+    flame.connect(flameBand).connect(flameGain).connect(bus);
+    const sizzle = noise(ctx, 'white');
+    sizzle.connect(filter(ctx, 'highpass', 5200)).connect(gain(ctx, 0.012)).connect(bus);
     roar.start();
-    nodes.push(roar, lfo(ctx, 0.18, 0.18, roarGain.gain));
-    every(timers, 50, 420, () => burst(ctx, bus, { frequency: 1800 + Math.random() * 2500, type: 'highpass', peak: 0.1 + Math.random() * 0.35, duration: 0.008 + Math.random() * 0.02 }));
+    flame.start();
+    sizzle.start();
+    nodes.push(roar, flame, sizzle);
+    // Tremulação irregular (fogo não pulsa como uma onda certinha).
+    every(timers, 120, 420, () => {
+      const now = ctx.currentTime;
+      roarGain.gain.setTargetAtTime(0.3 + Math.random() * 0.25, now, 0.12);
+      flameGain.gain.setTargetAtTime(0.05 + Math.random() * 0.1, now, 0.08);
+      flameBand.frequency.setTargetAtTime(650 + Math.random() * 600, now, 0.2);
+    });
+    // Estalinhos: sozinhos ou em rajadas curtas.
+    every(timers, 90, 650, () => {
+      const count = Math.random() < 0.3 ? 2 + Math.floor(Math.random() * 5) : 1;
+      let delay = 0;
+      for (let index = 0; index < count; index += 1) {
+        setTimeout(() => crackle(ctx, bus, 0.04 + Math.random() * 0.3), delay);
+        delay += 12 + Math.random() * 55;
+      }
+    });
+    // Estalo forte da madeira, seguido de faíscas.
+    every(timers, 2500, 8000, () => {
+      burst(ctx, bus, { frequency: 900 + Math.random() * 800, q: 1.4, peak: 0.25 + Math.random() * 0.2, duration: 0.04 + Math.random() * 0.05 });
+      for (let index = 0; index < 3; index += 1) {
+        setTimeout(() => crackle(ctx, bus, 0.08 + Math.random() * 0.15), 40 + index * (20 + Math.random() * 40));
+      }
+    });
   },
   wind(ctx, bus, nodes) {
     const air = noise(ctx, 'pink');
@@ -209,26 +242,12 @@ function stop(fadeSeconds = 1.2) {
   }, fadeSeconds * 1000 + 100);
 }
 
-// Carrega a gravação da fogueira uma vez (sem ela, a fogueira é gerada na hora).
-function loadFire(ctx) {
-  fireLoading ||= fetch(FIRE_RECORDING)
-    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error('missing'))))
-    .then((data) => ctx.decodeAudioData(data))
-    .then((buffer) => { fireBuffer = buffer; })
-    .catch(() => { fireBuffer = false; });
-  return fireLoading;
-}
-
 function start() {
   if (!scene || !getSettings().ambient) {
     return;
   }
   const ctx = audio();
   if (!ctx || ctx.state !== 'running' || playing) {
-    return;
-  }
-  if (scene === 'fire' && fireBuffer === null) {
-    loadFire(ctx).then(() => start());
     return;
   }
   const bus = gain(ctx, 0);
