@@ -9,24 +9,23 @@ namespace RolagemRpg;
 // máximo 1 stack. O servidor rola esses dados sozinho.
 public sealed partial class TableHub
 {
-    // Resist: "magic" desconta a resistência mágica; "half-magic" só metade dela;
-    // "none" ignora resistências (internos e espacial ignoram a armadura).
-    private sealed record StatusRule(string Id, int BaseCount, int BaseSides, int IncCount, int IncSides, int Max, int Duration, string Resist);
+    // Status ignoram qualquer resistência (física, mágica e perfuração), sempre.
+    private sealed record StatusRule(string Id, int BaseCount, int BaseSides, int IncCount, int IncSides, int Max, int Duration);
 
     private static readonly StatusRule[] StatusRules =
     {
-        new("queimando", 1, 6, 1, 4, 5, 3, "magic"),
-        new("chamaInfernal", 1, 10, 1, 6, 4, 3, "magic"),
-        new("sangrando", 1, 4, 1, 4, 6, 3, "none"),
-        new("hemorragia", 1, 8, 1, 6, 3, 3, "none"),
-        new("envenenado", 1, 6, 1, 4, 4, 4, "none"),
-        new("corroido", 1, 8, 1, 4, 5, 3, "magic"),
-        new("eletrocutado", 1, 8, 1, 4, 4, 2, "magic"),
-        new("congelamento", 1, 6, 1, 4, 5, 3, "magic"),
-        new("necrose", 1, 8, 1, 6, 4, 3, "magic"),
-        new("sobrecarga", 1, 6, 1, 6, 5, 2, "half-magic"),
-        new("deterioracao", 1, 10, 1, 4, 4, 3, "magic"),
-        new("ruptura", 1, 8, 1, 6, 3, 2, "none"),
+        new("queimando", 1, 6, 1, 4, 5, 3),
+        new("chamaInfernal", 1, 10, 1, 6, 4, 3),
+        new("sangrando", 1, 4, 1, 4, 6, 3),
+        new("hemorragia", 1, 8, 1, 6, 3, 3),
+        new("envenenado", 1, 6, 1, 4, 4, 4),
+        new("corroido", 1, 8, 1, 4, 5, 3),
+        new("eletrocutado", 1, 8, 1, 4, 4, 2),
+        new("congelamento", 1, 6, 1, 4, 5, 3),
+        new("necrose", 1, 8, 1, 6, 4, 3),
+        new("sobrecarga", 1, 6, 1, 6, 5, 2),
+        new("deterioracao", 1, 10, 1, 4, 4, 3),
+        new("ruptura", 1, 8, 1, 6, 3, 2),
     };
 
     private static int Roll(int count, int sides)
@@ -79,7 +78,7 @@ public sealed partial class TableHub
             // Eletrocutado: ao chegar a 4 stacks, causa +2d8 na hora e volta a 1.
             if (rule.Id == "eletrocutado" && effect.Stacks >= 4)
             {
-                var burst = Math.Max(0, Roll(2, 8) - StatusResistance(room, target, rule));
+                var burst = Roll(2, 8);
                 DamageFighter(room, combat, target, burst, combat.Fighters.FirstOrDefault(fighter => fighter.Id == effect.SourceId));
                 effect.Stacks = 1;
                 combat.LastTicks.Add(new StatusTick(target.Id, rule.Id, burst, true));
@@ -110,7 +109,6 @@ public sealed partial class TableHub
             {
                 damage += Roll(rule.IncCount, rule.IncSides);
             }
-            damage = Math.Max(0, damage - StatusResistance(room, fighter, rule));
             DamageFighter(room, combat, fighter, damage, combat.Fighters.FirstOrDefault(candidate => candidate.Id == effect.SourceId));
             combat.LastTicks.Add(new StatusTick(fighter.Id, rule.Id, damage, false));
             effect.TurnsLeft--;
@@ -120,13 +118,6 @@ public sealed partial class TableHub
             }
         }
     }
-
-    private static int StatusResistance(RoomState room, Fighter fighter, StatusRule rule) => rule.Resist switch
-    {
-        "magic" => ResistanceOf(room, fighter, "magic"),
-        "half-magic" => ResistanceOf(room, fighter, "magic") / 2,
-        _ => 0,
-    };
 
     // Tira vida e anota no resumo (dano causado, recebido e quedas).
     private static void DamageFighter(RoomState room, CombatState combat, Fighter target, int damage, Fighter? source)
