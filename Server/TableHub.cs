@@ -601,6 +601,11 @@ public sealed partial class TableHub : Hub
                 combatView = ViewOf(room);
                 combatChanged = true;
             }
+            if (room.Combat is { } activeCombat)
+            {
+                changedAccounts.AddRange(activeCombat.ChangedAccounts);
+                activeCombat.ChangedAccounts.Clear();
+            }
 
             sharedRoll = new SharedRoll(
                 roll.Id,

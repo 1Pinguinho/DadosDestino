@@ -74,7 +74,8 @@ public sealed record RoomSnapshot(
     IReadOnlyList<BlindRequestView> BlindRequests);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
-public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp);
+// Summary: o resumo do combate (mensagem automática ao encerrar).
+public sealed record ChatMessage(string Id, string PlayerId, string Name, string Color, string Text, long Timestamp, CombatSummary? Summary = null);
 
 // Reação rápida (um emoji da lista em TableHub.Reactions) na mesa de um jogador; não é guardada.
 public sealed record TableReaction(string TargetPlayerId, string Emoji, string From);

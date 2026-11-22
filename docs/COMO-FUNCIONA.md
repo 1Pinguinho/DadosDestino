@@ -106,6 +106,8 @@ padrão, menos o idioma e os atalhos.
   como a mesma pessoa, na mesma mesa.
 - **Chat:** fica na aba **Chat**, ao lado do histórico. Mensagens de até 500 caracteres; as
   últimas 200 ficam guardadas no computador do anfitrião enquanto a sala existir.
+- **Status de dano:** a tabela fica em `Server/TableHub.Status.cs` (base, acréscimo, máximo,
+  duração e tipo de resistência de cada status). O dano é rolado pelo servidor no fim do turno.
 - **Escudo do mestre:** aba **Escudo**, só para o mestre. Teste às cegas (o servidor manda o
   resultado inteiro só para o mestre e, se ele marcar, para quem rolou; os outros recebem "?"),
   chefes prontos (em `dados/contas/<id>/chefes.json`) e notas secretas (no arquivo da mesa salva).

@@ -1,6 +1,7 @@
 // Chat da sala, numa aba ao lado do histórico. A conversa fica guardada no servidor
 // enquanto a sala existir: quem sai e volta recebe tudo de novo ao entrar.
 import { t, errorText, formatTime } from './i18n.js';
+import { summaryCard } from './combat.js';
 
 const MAX_MESSAGES = 200;
 // Mensagens seguidas da mesma pessoa, com menos que isso entre elas, não repetem o nome.
@@ -81,10 +82,14 @@ export function initChat(manager) {
       } else {
         item.classList.add('is-grouped');
       }
-      const text = document.createElement('p');
-      text.className = 'chat-text';
-      text.textContent = message.text;
-      item.append(text);
+      if (message.summary) {
+        item.append(summaryCard(message.summary));
+      } else {
+        const text = document.createElement('p');
+        text.className = 'chat-text';
+        text.textContent = message.text;
+        item.append(text);
+      }
       list.append(item);
       previous = message;
     }

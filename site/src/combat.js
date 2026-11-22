@@ -5,6 +5,67 @@
 import { t, errorText } from './i18n.js';
 import { playTurn } from './sound.js';
 
+// Status de dano do sistema (a mesma lista do servidor) e o ícone de cada um.
+export const STATUS_ICONS = {
+  queimando: '🔥', chamaInfernal: '🌋', sangrando: '🩸', hemorragia: '🫀', envenenado: '🧪', corroido: '🦠',
+  eletrocutado: '⚡', congelamento: '❄️', necrose: '💀', sobrecarga: '🔮', deterioracao: '🌑', ruptura: '🌀',
+};
+const STATUS_IDS = Object.keys(STATUS_ICONS);
+
+// Cartão do resumo do combate (aparece ao encerrar e fica no chat).
+export function summaryCard(summary) {
+  const card = document.createElement('div');
+  card.className = 'combat-summary';
+  const title = document.createElement('strong');
+  title.className = 'combat-summary-title';
+  title.textContent = t('summary.title', { rounds: summary.rounds });
+  card.append(title);
+  const fighters = summary.fighters || [];
+  const best = (key) => fighters.reduce((top, entry) => (entry[key] > (top?.[key] ?? 0) ? entry : top), null);
+  const highlights = [
+    ['summary.mostDealt', best('dealt'), 'dealt'],
+    ['summary.mostTaken', best('taken'), 'taken'],
+    ['summary.mostRescues', best('rescues'), 'rescues'],
+  ].filter(([, entry]) => entry);
+  if (highlights.length) {
+    const list = document.createElement('div');
+    list.className = 'combat-summary-highlights';
+    for (const [key, entry, field] of highlights) {
+      const item = document.createElement('span');
+      item.textContent = t(key, { name: entry.name, value: entry[field] });
+      list.append(item);
+    }
+    card.append(list);
+  }
+  const table = document.createElement('table');
+  const head = document.createElement('tr');
+  for (const key of ['summary.who', 'summary.dealt', 'summary.taken', 'summary.hits', 'summary.crits', 'summary.downs']) {
+    const cell = document.createElement('th');
+    cell.textContent = t(key);
+    head.append(cell);
+  }
+  table.append(head);
+  for (const entry of fighters) {
+    const row = document.createElement('tr');
+    const values = [
+      `${entry.name}${entry.died ? ' ☠' : ''}`,
+      entry.dealt,
+      entry.taken,
+      `${entry.hits}/${entry.hits + entry.misses}`,
+      `${entry.crits}·${entry.fumbles}`,
+      entry.downs,
+    ];
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = String(value);
+      row.append(cell);
+    }
+    table.append(row);
+  }
+  card.append(table);
+  return card;
+}
+
 export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDamage, seatFor }) {
   const bar = document.querySelector('#combat-bar');
   const startButton = document.querySelector('#combat-start');
@@ -62,10 +123,62 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     if (!event) {
       return '';
     }
-    const params = { actor: nameOf(event.actorId), target: nameOf(event.targetId), value: event.value ?? '' };
+    const params = {
+      actor: nameOf(event.actorId), target: nameOf(event.targetId), value: event.value ?? '',
+      status: event.statusId ? t(`status.${event.statusId}`) : '',
+    };
     const key = `combat.event.${event.type}`;
     const text = t(key, params);
     return text === key ? '' : text;
+  }
+
+  // Dano dos status no fim do turno (ex.: "Lira: Queimando 5 · Sangrando 3").
+  function ticksText() {
+    if (!view?.ticks?.length) {
+      return '';
+    }
+    const byFighter = new Map();
+    for (const tick of view.ticks) {
+      const parts = byFighter.get(tick.fighterId) || [];
+      parts.push(`${STATUS_ICONS[tick.statusId] || ''} ${t(`status.${tick.statusId}`)}${tick.burst ? ' (+2d8)' : ''} ${tick.damage}`);
+      byFighter.set(tick.fighterId, parts);
+    }
+    return [...byFighter].map(([id, parts]) => `${nameOf(id)}: ${parts.join(' · ')}`).join(' — ');
+  }
+
+  // Ícones dos status ao lado do nome (com stacks e turnos restantes no título).
+  function statusBadges(statuses, removable = null) {
+    const wrap = document.createElement('span');
+    wrap.className = 'status-badges';
+    for (const effect of statuses || []) {
+      const badge = document.createElement(removable ? 'button' : 'span');
+      badge.className = 'status-badge';
+      badge.dataset.status = effect.id;
+      badge.textContent = `${STATUS_ICONS[effect.id] || '•'}${effect.stacks > 1 ? effect.stacks : ''}`;
+      badge.title = t('combat.statusTitle', { name: t(`status.${effect.id}`), stacks: effect.stacks, turns: effect.turnsLeft });
+      if (removable) {
+        badge.type = 'button';
+        badge.title += ` — ${t('combat.statusRemove')}`;
+        badge.addEventListener('click', () => removable(effect.id));
+      }
+      wrap.append(badge);
+    }
+    return wrap;
+  }
+
+  function statusPicker(onApply, labelKey) {
+    const row = document.createElement('div');
+    row.className = 'status-picker';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', t('combat.statusPick'));
+    for (const id of STATUS_IDS) {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = `${STATUS_ICONS[id]} ${t(`status.${id}`)}`;
+      select.append(option);
+    }
+    row.append(select, button(t(labelKey), () => onApply(select.value)));
+    return row;
   }
 
   function remaining() {
@@ -114,6 +227,10 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           text = t('combat.hitChooseDamage', { target: target?.name || '' });
           for (const type of ['physical', 'magic', 'pierce']) {
             actions.append(button(t(`kind.${type}`), () => selectDamage(type)));
+          }
+          // Uma ação aplica no máximo 1 stack de status no alvo.
+          if (!view.statusApplied && target) {
+            actions.append(statusPicker((id) => run('ApplyStatus', target.id, id), 'combat.applyStatus'));
           }
         } else if (view.step === 'reflex') {
           text = t('combat.waitingReflex', { target: target?.name || '', total: view.attackTotal });
@@ -175,6 +292,9 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     bar.className = 'combat-chip-bar';
     bar.style.width = `${entry.hpMax > 0 ? Math.max(0, Math.min(100, (entry.hp / entry.hpMax) * 100)) : 0}%`;
     element.append(name, meta, bar);
+    if (entry.statuses?.length) {
+      element.append(statusBadges(entry.statuses));
+    }
     return element;
   }
 
@@ -210,6 +330,9 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
       }
       if (entry.dead) {
         item.append(button(t('combat.revive'), () => run('Revive', entry.id), 'text-button'));
+      }
+      if (entry.statuses?.length) {
+        item.append(statusBadges(entry.statuses, (statusId) => run('RemoveStatus', entry.id, statusId)));
       }
       const remove = button('×', () => run('RemoveFighter', entry.id), 'text-button');
       remove.setAttribute('aria-label', t('combat.remove', { name: entry.name }));
@@ -258,7 +381,20 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
         : button(t('combat.pause'), () => run('PauseCombat')));
     }
     controlsRow.append(button(t('combat.end'), () => run('EndCombat'), 'combat-button is-danger'));
-    details.append(list, form, controlsRow);
+    // Aplicar status em qualquer um (o mestre não tem limite de stacks por ação).
+    const statusRow = document.createElement('div');
+    statusRow.className = 'combat-status-row';
+    const who = document.createElement('select');
+    who.setAttribute('aria-label', t('combat.statusWho'));
+    for (const entry of view.fighters.filter((candidate) => !candidate.dead)) {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.name;
+      who.append(option);
+    }
+    statusRow.append(span('combat-status-label', t('combat.statusFor')), who,
+      statusPicker((statusId) => run('ApplyStatus', who.value, statusId), 'combat.applyStatus'));
+    details.append(list, statusRow, form, controlsRow);
     return details;
   }
 
@@ -283,7 +419,7 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     const order = document.createElement('div');
     order.className = 'combat-chips';
     order.append(...view.fighters.map(chip));
-    const event = span('combat-event', feedback || eventText(view.lastEvent));
+    const event = span('combat-event', feedback || [eventText(view.lastEvent), ticksText()].filter(Boolean).join(' — '));
     bar.replaceChildren(head, order, prompt(), event);
     if (isMaster()) {
       bar.append(masterTools());
@@ -294,6 +430,16 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
   function updateSeats() {
     for (const seat of document.querySelectorAll('.player-seat')) {
       seat.classList.remove('is-turn', 'is-target');
+      seat.querySelector('.seat-conditions')?.remove();
+    }
+    // Ícones dos status ao lado do nome, na mesa de cada jogador.
+    for (const entry of view?.fighters || []) {
+      const seat = entry.playerId ? seatFor(entry.playerId) : null;
+      if (seat && entry.statuses?.length) {
+        const badges = statusBadges(entry.statuses);
+        badges.classList.add('seat-conditions');
+        seat.querySelector('.seat-details')?.append(badges);
+      }
     }
     if (!view || view.phase !== 'turns') {
       return;
@@ -324,7 +470,28 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     lastAlertKey = key;
   }
 
-  startButton.addEventListener('click', () => run('StartCombat'));
+  // Ao encerrar, o resumo aparece em cima das mesas até alguém fechar.
+  const summaryBox = document.querySelector('#combat-summary-box');
+  window.addEventListener('room-chat', (event) => {
+    const summary = event.detail?.summary;
+    if (!summary) {
+      return;
+    }
+    const close = button('×', () => { summaryBox.hidden = true; summaryBox.replaceChildren(); }, 'text-button combat-summary-close');
+    close.setAttribute('aria-label', t('settings.close'));
+    summaryBox.replaceChildren(close, summaryCard(summary));
+    summaryBox.hidden = false;
+  });
+  window.addEventListener('room-state', (event) => {
+    if (!event.detail?.code) {
+      summaryBox.hidden = true;
+    }
+  });
+
+  startButton.addEventListener('click', () => {
+    summaryBox.hidden = true;
+    run('StartCombat');
+  });
   window.addEventListener('room-combat', (event) => {
     view = event.detail || null;
     feedback = '';

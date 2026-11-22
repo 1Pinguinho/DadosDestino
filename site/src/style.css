@@ -1050,3 +1050,30 @@ html.reduce-motion .reaction-float { animation: reaction-still 2.4s steps(1, end
   .boss-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .boss-form-grid label:first-child { grid-column: 1 / -1; }
 }
+
+/* ---------- status de dano ---------- */
+.status-badges { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.status-badge { min-width: 20px; height: 18px; display: inline-flex; align-items: center; justify-content: center; gap: 1px; padding: 0 4px; border: 1px solid color-mix(in srgb, var(--warm) 40%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--warm) 10%, var(--surface)); color: var(--ink); font: 600 10px var(--mono); line-height: 1; }
+button.status-badge { cursor: pointer; }
+button.status-badge:hover { border-color: #e0646e; text-decoration: line-through; }
+.combat-chip .status-badges { margin-top: 3px; }
+.seat-conditions { margin-top: 2px; }
+.status-picker { display: inline-flex; align-items: center; gap: 6px; }
+.status-picker select, .combat-status-row select { height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); color: var(--ink); font: 11px var(--mono); }
+.combat-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.combat-status-label { color: var(--faint); font: 8px var(--mono); letter-spacing: .6px; }
+
+/* ---------- resumo do combate ---------- */
+.combat-summary-box { position: relative; margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--accent-line); border-top: 2px solid var(--accent); border-radius: 6px; background: var(--surface); animation: reveal .25s ease-out both; }
+.combat-summary-box[hidden] { display: none; }
+.combat-summary-close { position: absolute; top: 8px; right: 10px; font-size: 16px; }
+.combat-summary { display: grid; gap: 8px; }
+.combat-summary-title { font: 500 17px var(--serif); }
+.combat-summary-highlights { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--accent-strong); font: 12px var(--serif); }
+.combat-summary table { width: 100%; border-collapse: collapse; font: 11px var(--mono); }
+.combat-summary th { padding: 4px 6px; color: var(--faint); font: 8px var(--mono); letter-spacing: .6px; text-align: right; }
+.combat-summary th:first-child, .combat-summary td:first-child { text-align: left; }
+.combat-summary td { padding: 4px 6px; border-top: 1px solid var(--line); text-align: right; }
+.chat-message .combat-summary { margin-top: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); }
+.chat-message .combat-summary-title { font-size: 13px; }
+.chat-message .combat-summary table { font-size: 9px; }
