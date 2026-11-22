@@ -1077,3 +1077,7 @@ button.status-badge:hover { border-color: #e0646e; text-decoration: line-through
 .chat-message .combat-summary { margin-top: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); }
 .chat-message .combat-summary-title { font-size: 13px; }
 .chat-message .combat-summary table { font-size: 9px; }
+
+/* ---------- trilha ambiente ---------- */
+.ambient-scenes { flex-wrap: wrap; }
+.ambient-scenes button { flex: 1 1 80px; }

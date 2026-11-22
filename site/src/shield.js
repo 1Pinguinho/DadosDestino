@@ -4,6 +4,7 @@
 import { t, errorText } from './i18n.js';
 import { api, currentAccount, onAccountChange } from './account.js';
 import { SKILLS } from './sheet.js';
+import { AMBIENT_SCENES } from './ambient.js';
 
 function el(tag, props = {}, ...children) {
   const element = document.createElement(tag);
@@ -37,6 +38,7 @@ export function initShield({ manager }) {
   let blindFeedback = '';
   let bossFeedback = '';
   let notesStatus = '';
+  let ambientScene = '';
   // O que o mestre já escolheu no teste às cegas (a aba redesenha quando a sala muda).
   const blindChoice = { who: '', test: 'percepcao', notation: '1d20', label: '', sees: false };
 
@@ -232,6 +234,23 @@ export function initShield({ manager }) {
     return form;
   }
 
+  // ---------- trilha ambiente ----------
+  function ambientSection() {
+    const group = el('div', { class: 'segmented ambient-scenes', role: 'group', 'aria-label': t('shield.ambientTitle') });
+    for (const value of ['', ...AMBIENT_SCENES]) {
+      const option = el('button', { type: 'button', text: t(`ambient.${value || 'silence'}`), 'aria-pressed': String(value === ambientScene) });
+      option.addEventListener('click', async () => {
+        try {
+          await manager.invoke('SetAmbient', value);
+        } catch {
+          // Sem conexão: fica como estava.
+        }
+      });
+      group.append(option);
+    }
+    return section('shield.ambientTitle', el('p', { class: 'field-hint', text: t('shield.ambientHint') }), group);
+  }
+
   // ---------- notas secretas ----------
   function notesSection() {
     const area = el('textarea', { class: 'shield-notes', rows: 8, maxLength: 6000, value: notesText, placeholder: t('shield.notesPlaceholder'), 'aria-label': t('shield.notesTitle'), disabled: !notesLoaded });
@@ -275,6 +294,7 @@ export function initShield({ manager }) {
         el('p', { class: 'chapter', text: t('shield.chapter') }),
         el('h2', { id: 'shield-title', text: t('shield.title') }))),
       blindSection(),
+      ambientSection(),
       bossSection(),
       notesSection());
   }
@@ -295,6 +315,10 @@ export function initShield({ manager }) {
         }
       }
     }
+    render();
+  });
+  window.addEventListener('room-ambient', (event) => {
+    ambientScene = event.detail || '';
     render();
   });
   window.addEventListener('room-combat', (event) => {

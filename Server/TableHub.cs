@@ -1035,7 +1035,8 @@ public sealed partial class TableHub : Hub
             room.Notes.ToArray(),
             room.OwnerAccountId is not null,
             ViewOf(room),
-            room.BlindRequests.Where(pair => pair.Value.PlayerId == viewer.Id).Select(pair => pair.Value.View(pair.Key)).ToArray());
+            room.BlindRequests.Where(pair => pair.Value.PlayerId == viewer.Id).Select(pair => pair.Value.View(pair.Key)).ToArray(),
+            room.Ambient);
     }
 
     private static RoomPlayer ToRoomPlayer(PlayerState player, SharedRoll? lastRoll)
@@ -1129,6 +1130,7 @@ public sealed partial class TableHub : Hub
         public List<RoomNote> Notes { get; set; } = new();
         public CombatState? Combat { get; set; }
         public string MasterNotes { get; set; } = string.Empty;
+        public string Ambient { get; set; } = string.Empty;
         // Testes às cegas pedidos pelo mestre e ainda não rolados (id → pedido).
         public Dictionary<string, BlindRequestState> BlindRequests { get; } = new(StringComparer.Ordinal);
         // Conta do mestre que criou a sala: com ela, a sala fica salva em disco.

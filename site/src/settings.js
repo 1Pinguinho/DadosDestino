@@ -24,6 +24,8 @@ function defaults() {
     fullscreen: false,
     sound: true,
     volume: 20,
+    ambient: true,
+    ambientVolume: 30,
     seatColor: null,
     diceColor: 'classic',
     diceCustom: { ...DICE_DEFAULTS },
@@ -42,6 +44,8 @@ function normalize(value) {
   result.fullscreen = result.fullscreen === true;
   result.sound = result.sound !== false;
   result.volume = Number.isFinite(Number(result.volume)) ? Math.min(100, Math.max(0, Math.round(Number(result.volume)))) : base.volume;
+  result.ambient = result.ambient !== false;
+  result.ambientVolume = Number.isFinite(Number(result.ambientVolume)) ? Math.min(100, Math.max(0, Math.round(Number(result.ambientVolume)))) : base.ambientVolume;
   result.seatColor = COLORS.includes(result.seatColor) ? result.seatColor : null;
   result.diceColor = ['classic', 'custom'].includes(result.diceColor) || COLORS.includes(result.diceColor) ? result.diceColor : 'classic';
   result.diceStyle = DICE_STYLES.includes(result.diceStyle) ? result.diceStyle : 'classic';
@@ -125,6 +129,9 @@ const fullscreenButton = document.querySelector('#fullscreen-toggle');
 const soundButton = document.querySelector('#sound-toggle');
 const volumeInput = document.querySelector('#volume');
 const volumeValue = document.querySelector('#volume-value');
+const ambientButton = document.querySelector('#ambient-toggle');
+const ambientInput = document.querySelector('#ambient-volume');
+const ambientValue = document.querySelector('#ambient-volume-value');
 const resetButton = document.querySelector('#settings-reset');
 let resetTimer = 0;
 let mySeatColor = null;
@@ -179,6 +186,11 @@ function syncControls() {
   volumeInput.value = String(settings.volume);
   volumeInput.disabled = !settings.sound;
   volumeValue.textContent = `${settings.volume}%`;
+  ambientButton.setAttribute('aria-pressed', String(settings.ambient));
+  ambientButton.textContent = settings.ambient ? t('settings.on') : t('settings.off');
+  ambientInput.value = String(settings.ambientVolume);
+  ambientInput.disabled = !settings.ambient;
+  ambientValue.textContent = `${settings.ambientVolume}%`;
 }
 
 // Seções recolhíveis (tema, cor da mesa, modelo e cor dos dados): o título mostra
@@ -355,6 +367,12 @@ export function initSettings() {
     updateSettings({ volume: Number(volumeInput.value) });
     window.dispatchEvent(new CustomEvent('volume-preview'));
   });
+  ambientButton.addEventListener('click', () => updateSettings({ ambient: !settings.ambient }));
+  ambientInput.addEventListener('input', () => {
+    ambientValue.textContent = `${ambientInput.value}%`;
+    window.dispatchEvent(new CustomEvent('ambient-volume-preview', { detail: Number(ambientInput.value) }));
+  });
+  ambientInput.addEventListener('change', () => updateSettings({ ambientVolume: Number(ambientInput.value) }));
 
   // Restaurar padrões pede um segundo clique para confirmar. Idioma e atalhos ficam.
   resetButton.addEventListener('click', () => {

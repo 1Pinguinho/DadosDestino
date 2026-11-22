@@ -49,6 +49,9 @@ public sealed class Preferences
     public bool Sound { get; set; } = true;
     // Volume baixo por padrão, para não assustar quem usa equalizador ou volume alto.
     public int Volume { get; set; } = 20;
+    // Trilha ambiente (escolhida pelo mestre): liga/desliga e volume próprios de cada pessoa.
+    public bool Ambient { get; set; } = true;
+    public int AmbientVolume { get; set; } = 30;
     public string? SeatColor { get; set; }
     public string DiceColor { get; set; } = "classic";
     public string DiceStyle { get; set; } = "classic";
@@ -77,6 +80,8 @@ public sealed class Preferences
         Fullscreen = incoming.Fullscreen;
         Sound = incoming.Sound;
         Volume = incoming.Volume;
+        Ambient = incoming.Ambient;
+        AmbientVolume = incoming.AmbientVolume;
         SeatColor = incoming.SeatColor;
         DiceColor = incoming.DiceColor;
         DiceStyle = incoming.DiceStyle;
@@ -101,6 +106,7 @@ public sealed class Preferences
         Custom.Glow = HexColor.IsMatch(Custom.Glow ?? string.Empty) ? Custom.Glow!.ToLowerInvariant() : CustomColors.DefaultGlow;
         Zoom = double.IsFinite(Zoom) ? Math.Round(Math.Clamp(Zoom, 0.7, 1.5), 2) : 1;
         Volume = Math.Clamp(Volume, 0, 100);
+        AmbientVolume = Math.Clamp(AmbientVolume, 0, 100);
         SeatColor = SeatColor is not null && Colors.Contains(SeatColor) ? SeatColor : null;
         DiceColor = DiceColor is "classic" or "custom" || Colors.Contains(DiceColor) ? DiceColor : "classic";
         DiceStyle = TableHub.DiceStyles.Contains(DiceStyle) ? DiceStyle : "classic";

@@ -769,6 +769,9 @@ function renderRoom(room) {
   if (Array.isArray(room.notes)) {
     window.dispatchEvent(new CustomEvent('room-notes', { detail: room.notes }));
   }
+  if (typeof room.ambient === 'string') {
+    window.dispatchEvent(new CustomEvent('room-ambient', { detail: room.ambient }));
+  }
   if (Array.isArray(room.blindRequests)) {
     window.dispatchEvent(new CustomEvent('room-blind-requests', { detail: { requests: room.blindRequests, replace: true } }));
   }
@@ -1001,6 +1004,13 @@ connection.on('ChatMessage', (message) => {
 
 connection.on('Reaction', (reaction) => {
   window.dispatchEvent(new CustomEvent('room-reaction', { detail: reaction }));
+});
+
+connection.on('AmbientChanged', (scene) => {
+  if (activeRoom) {
+    activeRoom = { ...activeRoom, ambient: scene };
+    window.dispatchEvent(new CustomEvent('room-ambient', { detail: scene }));
+  }
 });
 
 connection.on('BlindRequest', (request) => {

@@ -72,6 +72,25 @@ public sealed partial class TableHub
         }
     }
 
+    // Trilha ambiente da mesa ("" = silêncio). Cada pessoa controla o próprio volume.
+    private static readonly string[] AmbientScenes = { "", "rain", "fire", "wind", "tavern", "tension" };
+
+    public async Task SetAmbient(string scene)
+    {
+        var value = scene ?? string.Empty;
+        if (!AmbientScenes.Contains(value))
+        {
+            throw new HubException("INVALID_REQUEST");
+        }
+        var (code, playerId) = CurrentSeat();
+        lock (RoomsLock)
+        {
+            var (room, _) = RequireMaster(code, playerId);
+            room.Ambient = value;
+        }
+        await Clients.Group(code).SendAsync("AmbientChanged", value);
+    }
+
     private (RoomState Room, PlayerState Master) RequireMaster(string code, string playerId)
     {
         if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(playerId, out var actor)

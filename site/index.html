@@ -188,6 +188,15 @@
                     <input id="volume" type="range" min="0" max="100" step="5" value="20" data-i18n-aria="settings.volume" />
                     <output id="volume-value">20%</output>
                   </label>
+                  <div class="settings-row">
+                    <span class="field-label" data-i18n="settings.ambient">TRILHA AMBIENTE</span>
+                    <button id="ambient-toggle" class="switch" type="button" aria-pressed="true">Ligada</button>
+                  </div>
+                  <label class="volume-row">
+                    <span class="field-label" data-i18n="settings.ambientVolume">VOLUME DA TRILHA</span>
+                    <input id="ambient-volume" type="range" min="0" max="100" step="5" value="30" data-i18n-aria="settings.ambientVolume" />
+                    <output id="ambient-volume-value">30%</output>
+                  </label>
                 </section>
               </div>
               <button id="settings-reset" class="settings-reset" type="button" data-i18n="settings.reset">Restaurar padrões</button>

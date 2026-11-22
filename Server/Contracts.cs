@@ -71,7 +71,8 @@ public sealed record RoomSnapshot(
     IReadOnlyList<RoomNote> Notes,
     bool IsSaved,
     CombatView? Combat,
-    IReadOnlyList<BlindRequestView> BlindRequests);
+    IReadOnlyList<BlindRequestView> BlindRequests,
+    string Ambient);
 
 // Mensagem do chat da sala. Color vazio = espectador. Fica guardada até a sala fechar.
 // Summary: o resumo do combate (mensagem automática ao encerrar).
