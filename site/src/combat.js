@@ -4,6 +4,7 @@
 // Reflexos, Medicina ou iniciativa (os botões só preenchem e rolam por você).
 import { t, errorText } from './i18n.js';
 import { playTurn } from './sound.js';
+import { skillTest } from './sheet.js';
 
 // Status de dano do sistema (a mesma lista do servidor) e o ícone de cada um.
 export const STATUS_ICONS = {
@@ -128,8 +129,20 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
       status: event.statusId ? t(`status.${event.statusId}`) : '',
     };
     const key = `combat.event.${event.type}`;
-    const text = t(key, params);
-    return text === key ? '' : text;
+    let text = t(key, params);
+    if (text === key) {
+      return '';
+    }
+    if (event.abilityName) {
+      text = `✦ ${event.abilityName}: ${text}`;
+    }
+    if (event.critical) {
+      text += ` — ${t('combat.critical')}`;
+    }
+    if (event.statusId && event.type === 'damage') {
+      text += ` + ${STATUS_ICONS[event.statusId] || ''} ${t(`status.${event.statusId}`)}`;
+    }
+    return text;
   }
 
   // Dano dos status no fim do turno (ex.: "Lira: Queimando 5 · Sangrando 3").
@@ -181,6 +194,55 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     return row;
   }
 
+  // Plano do ataque da vez: tipo e status escolhidos antes de rolar.
+  let plan = { key: '', type: 'physical', status: '' };
+  function currentPlan() {
+    const key = `${view?.currentId}:${view?.round}`;
+    if (plan.key !== key) {
+      plan = { key, type: 'physical', status: '' };
+    }
+    return plan;
+  }
+  const ATTACK_SKILL = { physical: 'luta', pierce: 'pontaria', magic: 'magia' };
+  function attackNotation(current, type) {
+    const sheet = current?.isBoss ? null : getSheet();
+    return withBonus(sheet ? skillTest(sheet, ATTACK_SKILL[type]) : 0);
+  }
+
+  function attackPlanner(current) {
+    const chosen = currentPlan();
+    const wrap = document.createElement('div');
+    wrap.className = 'attack-planner';
+    const types = document.createElement('div');
+    types.className = 'segmented attack-types';
+    types.setAttribute('role', 'group');
+    types.setAttribute('aria-label', t('combat.attackType'));
+    for (const type of ['physical', 'magic', 'pierce']) {
+      const option = button(t(`kind.${type}`), () => {
+        chosen.type = type;
+        render();
+      }, '');
+      option.setAttribute('aria-pressed', String(chosen.type === type));
+      types.append(option);
+    }
+    const status = document.createElement('select');
+    status.setAttribute('aria-label', t('combat.statusPick'));
+    status.append(new Option(t('combat.noStatus'), ''));
+    for (const id of STATUS_IDS) {
+      status.append(new Option(`${STATUS_ICONS[id]} ${t(`status.${id}`)}`, id));
+    }
+    status.value = chosen.status;
+    status.addEventListener('change', () => { chosen.status = status.value; });
+    const notation = attackNotation(current, chosen.type);
+    const roll = button(t('combat.rollButton', { what: t('effect.attack'), notation }),
+      () => rollNotation(notation, { kind: 'attack', damageType: chosen.type, statusId: chosen.status || null }), 'combat-button is-primary');
+    wrap.append(types, status, roll);
+    if (chosen.type === 'magic') {
+      wrap.append(span('attack-hint', t('combat.magicHint')));
+    }
+    return wrap;
+  }
+
   function remaining() {
     if (!view?.deadline) {
       return '';
@@ -218,19 +280,38 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     } else {
       const current = fighter(view.currentId);
       const target = fighter(view.targetId);
-      if (view.step === 'reflex' && target && controls(target)) {
+      const counter = fighter(view.counterId);
+      if (view.step === 'counter' && counter) {
+        // Crítico na defesa: quem defendeu contra-ataca, sem defesa do atacante.
+        if (controls(counter)) {
+          text = t('combat.counterYou', { target: current?.name || '' });
+          for (const type of ['physical', 'magic', 'pierce']) {
+            actions.append(button(t(`kind.${type}`), () => selectDamage(type)));
+          }
+        } else {
+          text = t('combat.counterOther', { actor: counter.name, target: current?.name || '' });
+        }
+      } else if (view.step === 'reflex' && target && controls(target)) {
         text = t('combat.underAttack', { actor: current?.name || '', total: view.attackTotal, target: target.name });
         const notation = withBonus(target.reflex);
         actions.append(button(t('combat.rollButton', { what: t('skill.reflexos'), notation }), () => rollNotation(notation, { kind: 'reflex' }), 'combat-button is-primary'));
       } else if (controls(current)) {
         if (view.step === 'damage') {
-          text = t('combat.hitChooseDamage', { target: target?.name || '' });
-          for (const type of ['physical', 'magic', 'pierce']) {
-            actions.append(button(t(`kind.${type}`), () => selectDamage(type)));
+          // O tipo já foi escolhido antes do ataque; o status (se tiver) entra junto.
+          const extras = [t(`kind.${view.attackType}`)];
+          if (view.critical) {
+            extras.push(t(view.attackType === 'magic' ? 'combat.critMagic' : 'combat.critPhysical'));
           }
-          // Uma ação aplica no máximo 1 stack de status no alvo.
-          if (!view.statusApplied && target) {
-            actions.append(statusPicker((id) => run('ApplyStatus', target.id, id), 'combat.applyStatus'));
+          if (view.pendingStatusId) {
+            extras.push(`${STATUS_ICONS[view.pendingStatusId] || ''} ${t(`status.${view.pendingStatusId}`)}`);
+          }
+          text = t('combat.hitRollDamage', { target: target?.name || '', details: extras.join(' · ') });
+          if (view.abilityNotation) {
+            const notation = view.abilityNotation;
+            actions.append(button(t('combat.rollButton', { what: view.abilityName || t('effect.damage'), notation }),
+              () => rollNotation(notation, { kind: 'damage', damageType: view.attackType, manaCost: 0 }), 'combat-button is-primary'));
+          } else {
+            actions.append(button(t('combat.rollDamage'), () => selectDamage(view.attackType), 'combat-button is-primary'));
           }
         } else if (view.step === 'reflex') {
           text = t('combat.waitingReflex', { target: target?.name || '', total: view.attackTotal });
@@ -241,7 +322,9 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           const notation = withBonus(current.medicine);
           actions.append(button(t('combat.rollButton', { what: t('skill.medicina'), notation }), () => rollNotation(notation, { kind: 'medicine' }), 'combat-button is-primary'));
         } else {
-          text = t('combat.rollAttack', { target: target.name });
+          // Antes de rolar: tipo do ataque (magia não deixa o alvo se defender) e status.
+          text = t('combat.planAttack', { target: target.name });
+          actions.append(attackPlanner(current));
         }
         if (view.step === 'act') {
           actions.append(button(t('combat.pass'), () => run('PassTurn')));
@@ -533,14 +616,38 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
         return { kind: 'reflex' };
       }
       if (controls(current) && view.step === 'act' && target) {
-        return { kind: target.down ? 'medicine' : 'attack' };
+        if (target.down) {
+          return { kind: 'medicine' };
+        }
+        const chosen = currentPlan();
+        return { kind: 'attack', damageType: chosen.type, statusId: chosen.status || null };
       }
       return null;
     },
-    // Na hora do dano, quem atacou precisa escolher o tipo antes de rolar.
+    // Na hora do dano (ou do contra-ataque), a rolagem tem que ser de dano.
     needsDamageType() {
       room = getRoom();
-      return Boolean(view && !view.paused && view.phase === 'turns' && view.step === 'damage' && controls(fighter(view.currentId)));
+      if (!view || view.paused || view.phase !== 'turns') {
+        return false;
+      }
+      return (view.step === 'damage' && controls(fighter(view.currentId)))
+        || (view.step === 'counter' && controls(fighter(view.counterId)));
+    },
+    // Para as habilidades no rolador: se está em combate, se é a sua vez de agir e
+    // se já escolheu um alvo inimigo; usos e recarga de cada habilidade.
+    powerState() {
+      room = getRoom();
+      const me = mine();
+      const active = Boolean(view && view.phase === 'turns' && !view.paused && me);
+      const current = fighter(view?.currentId);
+      const target = fighter(view?.targetId);
+      return {
+        inCombat: active,
+        myTurnAct: active && current?.id === me.id && view.step === 'act',
+        targetEnemy: Boolean(target && !target.down),
+        cooldowns: me?.powerCooldowns || {},
+        uses: me?.powerUses || {},
+      };
     },
     refreshSeats: updateSeats,
   };

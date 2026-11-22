@@ -48,7 +48,7 @@ public sealed partial class TableHub : Hub
     private readonly IHubContext<TableHub> hubContext;
 
     // Tipos de rolagem que o site pode mandar (ver SharedRoll.Kind).
-    private static readonly string[] RollKinds = { "normal", "recovery", "damage", "attack", "reflex", "initiative", "medicine", "blind" };
+    private static readonly string[] RollKinds = { "normal", "recovery", "damage", "attack", "reflex", "initiative", "medicine", "blind", "ability" };
 
     public TableHub(ServerConfig config, IHubContext<TableHub> hubContext)
     {
@@ -598,6 +598,21 @@ public sealed partial class TableHub : Hub
                     changedAccounts.Add(actor.AccountId!);
                 }
             }
+            string? powerLabel = null;
+            if (kind == "ability")
+            {
+                // Habilidade da ficha fora do ataque (cura, ou qualquer uma fora de combate).
+                var used = ApplyPowerRoll(room, actor, roll, changedAccounts);
+                applied = used.Applied;
+                effectTargetId = used.EffectTargetId;
+                recoverStat = used.RecoverStat;
+                powerLabel = used.Label;
+                if (room.Combat is { Phase: "turns" })
+                {
+                    combatView = ViewOf(room);
+                    combatChanged = true;
+                }
+            }
 
             string? blindLabel = null;
             var blindSees = false;
@@ -646,7 +661,7 @@ public sealed partial class TableHub : Hub
                 damageType,
                 manaCost,
                 applied,
-                blindLabel,
+                blindLabel ?? powerLabel,
                 blindSees);
 
             room.Rolls.Add(sharedRoll);

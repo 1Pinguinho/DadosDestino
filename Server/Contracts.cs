@@ -134,4 +134,5 @@ public sealed record BlindRequestView(string Id, string Label, string? SkillId, 
 // DiceStyle: o modelo dos dados (formato e símbolos), um da lista em TableHub.DiceStyles.
 // RecoverStat: "hp" ou "ea". DamageType: "physical", "magic" ou "pierce". ManaCost: EA gasta na magia.
 public sealed record RollPayload(string Id, string Notation, double Total, string Output, string TargetPlayerId, bool IsPrivate, IReadOnlyList<RollDie>? Dice, int ExtraDice, string? DiceColor, string? DiceStyle,
-    string? Kind = null, string? EffectTargetId = null, string? RecoverStat = null, string? DamageType = null, int ManaCost = 0);
+    string? Kind = null, string? EffectTargetId = null, string? RecoverStat = null, string? DamageType = null, int ManaCost = 0,
+    string? StatusId = null, string? AbilityId = null);

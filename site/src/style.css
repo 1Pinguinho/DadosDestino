@@ -945,6 +945,27 @@ html.reduce-motion .reaction-float { animation: reaction-still 2.4s steps(1, end
 .quick-chip[data-kind='physical'] b, .quick-chip[data-kind='pierce'] b { color: #e0646e; }
 .quick-chip[data-kind='magic'] b { color: #78b4f0; }
 .quick-chip[data-kind='recovery'] b { color: #64c88c; }
+/* Habilidades: editor na ficha, botões no rolador e plano do ataque no combate. */
+.power-list { display: grid; gap: 8px; margin-bottom: 10px; }
+.power-card { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-left: 3px solid #e0646e; border-radius: 4px; background: var(--surface-2); }
+.power-card[data-kind="magic"] { border-left-color: #78b4f0; }
+.power-card[data-kind="recovery"] { border-left-color: #64c88c; }
+.power-row { display: grid; grid-template-columns: minmax(0, 1.2fr) 150px minmax(0, 1fr) 20px; align-items: center; gap: 6px; }
+.power-row .text-button { font-size: 14px; }
+.power-details { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); align-items: end; }
+.power-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.power-field span { color: var(--muted); font: 8px var(--mono); letter-spacing: .6px; }
+.sheet-view .power-field input, .sheet-view .power-field select { width: 100%; height: 30px; }
+.powers-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.powers-head .field-label { margin: 0; }
+.powers-head select { height: 26px; max-width: 60%; padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--field); color: var(--ink); font: 10px var(--mono); }
+.power-chip:disabled { cursor: not-allowed; opacity: .45; }
+.attack-planner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.attack-planner .attack-types { flex: 0 0 auto; }
+.attack-planner .attack-types button { min-height: 28px; flex: 0 0 auto; }
+.attack-planner select { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--field); color: var(--ink); font: 11px var(--mono); }
+.attack-hint { width: 100%; color: var(--muted); font: 10px var(--mono); }
+@media (max-width: 640px) { .power-row { grid-template-columns: minmax(0, 1fr) 20px; } .power-row > select, .power-row > input:nth-child(3) { grid-column: 1; } }
 
 @media (max-width: 820px) {
   .sheet-view, .notes-view { grid-column: 1 / -1; }

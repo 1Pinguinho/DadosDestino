@@ -76,6 +76,8 @@ public sealed class Sheet
     public List<string> Abilities { get; set; } = new();
     public List<string> Inventory { get; set; } = new();
     public List<QuickRoll> QuickRolls { get; set; } = new();
+    // Habilidades prontas (ataques, magias e curas). O servidor confere EA, usos e recarga.
+    public List<Power> Powers { get; set; } = new();
 
     public int AttributeValue(string id) => Attributes.TryGetValue(id, out var value) ? value.Value : 0;
 
@@ -141,6 +143,11 @@ public sealed class Sheet
             Notation = Clean(roll.Notation, 60),
             Kind = QuickRollKinds.Contains(roll.Kind) ? roll.Kind : "test",
         }).Where(roll => roll.Name.Length > 0 && roll.Notation.Length > 0).ToList();
+        var powerIds = new HashSet<string>(StringComparer.Ordinal);
+        Powers = (Powers ?? new()).Where(power => power is not null).Take(Power.MaxPowers)
+            .Select(power => power.Normalized())
+            .Where(power => power.Name.Length > 0 && power.Notation.Length > 0 && powerIds.Add(power.Id))
+            .ToList();
     }
 
     private static List<string> CleanList(List<string>? items) =>
@@ -197,4 +204,61 @@ public sealed class QuickRoll
     public string Name { get; set; } = string.Empty;
     public string Notation { get; set; } = string.Empty;
     public string Kind { get; set; } = "test";
+}
+
+// Habilidade criada pelo jogador. Ataques (físico, mágico ou perfuração) rolam o teste
+// da perícia escolhida contra o alvo e depois o dano; magia não deixa o alvo se defender.
+// Recuperação cura você, um aliado ou todos os jogadores (área), nunca um chefe.
+public sealed class Power
+{
+    public const int MaxPowers = 30;
+    public static readonly string[] Kinds = { "physical", "magic", "pierce", "recovery" };
+    public static readonly string[] StatusIds =
+    {
+        "queimando", "chamaInfernal", "sangrando", "hemorragia", "envenenado", "corroido",
+        "eletrocutado", "congelamento", "necrose", "sobrecarga", "deterioracao", "ruptura",
+    };
+
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = "physical";
+    // Rolagem do dano (ou da cura), ex.: "2d8+3".
+    public string Notation { get; set; } = string.Empty;
+    // Perícia do teste de ataque (só ataques).
+    public string Skill { get; set; } = "luta";
+    public int EaCost { get; set; }
+    // 0 = sem limite.
+    public int UsesPerTurn { get; set; }
+    // Turnos seus de espera depois de usar (0 = sem recarga).
+    public int Cooldown { get; set; }
+    public string? StatusId { get; set; }
+    // Só recuperação: "hp" ou "ea", e "single" (você ou um aliado) ou "area" (todos os jogadores).
+    public string RecoverStat { get; set; } = "hp";
+    public string Area { get; set; } = "single";
+
+    public bool IsAttack => Kind != "recovery";
+
+    public Power Normalized()
+    {
+        var id = Sheet.Clean(Id, 40);
+        if (id.Length == 0 || id.Any(character => !char.IsAsciiLetterOrDigit(character)))
+        {
+            id = Guid.NewGuid().ToString("N");
+        }
+        var kind = Kinds.Contains(Kind) ? Kind : "physical";
+        return new Power
+        {
+            Id = id,
+            Name = Sheet.Clean(Name, 30),
+            Kind = kind,
+            Notation = Sheet.Clean(Notation, 60),
+            Skill = Sheet.SkillList.Any(skill => skill.Id == Skill) ? Skill : kind switch { "magic" => "magia", "pierce" => "pontaria", _ => "luta" },
+            EaCost = Sheet.Clamp(EaCost, 0, Sheet.MaxStatus),
+            UsesPerTurn = Sheet.Clamp(UsesPerTurn, 0, 10),
+            Cooldown = Sheet.Clamp(Cooldown, 0, 20),
+            StatusId = kind != "recovery" && StatusId is not null && StatusIds.Contains(StatusId) ? StatusId : null,
+            RecoverStat = RecoverStat == "ea" ? "ea" : "hp",
+            Area = Area == "area" ? "area" : "single",
+        };
+    }
 }

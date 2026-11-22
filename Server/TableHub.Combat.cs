@@ -252,11 +252,40 @@ public sealed partial class TableHub
                 {
                     throw new HubException("TARGET_UNAVAILABLE");
                 }
+                // Tipo do ataque e status escolhidos antes de rolar (ou os da habilidade usada).
+                var type = DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical";
+                var statusId = roll.StatusId is not null && Power.StatusIds.Contains(roll.StatusId) ? roll.StatusId : null;
+                combat.AbilityName = null;
+                combat.AbilityNotation = null;
+                if (roll.AbilityId is not null)
+                {
+                    var power = UsePower(room, combat, current, actor, roll.AbilityId, changedAccounts);
+                    if (!power.IsAttack)
+                    {
+                        throw new HubException("INVALID_ROLL");
+                    }
+                    type = power.Kind;
+                    statusId = power.StatusId;
+                    combat.AbilityName = power.Name;
+                    combat.AbilityNotation = power.Notation;
+                }
                 CountNatural(current, roll);
+                combat.AttackType = type;
+                combat.PendingStatusId = statusId;
+                combat.Critical = NaturalD20(roll) == 20;
                 combat.AttackTotal = total;
+                if (type == "magic")
+                {
+                    // Magia: o alvo não rola contra. Vai direto para o dano.
+                    current.Stats.Hits++;
+                    combat.Step = "damage";
+                    combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
+                    combat.LastEvent = new CombatEvent("magicHit", current.Id, target.Id, total) { Critical = combat.Critical, AbilityName = combat.AbilityName };
+                    return true;
+                }
                 combat.Step = "reflex";
                 combat.StepEndsUtc = DateTime.UtcNow + ReactionTime;
-                combat.LastEvent = new CombatEvent("attack", current.Id, target.Id, total);
+                combat.LastEvent = new CombatEvent("attack", current.Id, target.Id, total) { Critical = combat.Critical, AbilityName = combat.AbilityName };
                 return true;
             }
             case "reflex":
@@ -272,8 +301,21 @@ public sealed partial class TableHub
                 }
                 var current = combat.Current!;
                 CountNatural(target, roll);
-                if (combat.AttackTotal > total)
+                if (NaturalD20(roll) == 20)
                 {
+                    // Crítico na defesa: o ataque falha e o defensor contra-ataca, sem
+                    // que o atacante possa se defender.
+                    current.Stats.Misses++;
+                    combat.Critical = false;
+                    combat.PendingStatusId = null;
+                    combat.Step = "counter";
+                    combat.CounterId = target.Id;
+                    combat.StepEndsUtc = DateTime.UtcNow + ReactionTime;
+                    combat.LastEvent = new CombatEvent("counter", target.Id, current.Id, total);
+                }
+                else if (combat.Critical || combat.AttackTotal > total)
+                {
+                    // 20 natural no ataque sempre acerta (e é crítico).
                     current.Stats.Hits++;
                     combat.Step = "damage";
                     combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
@@ -290,17 +332,40 @@ public sealed partial class TableHub
             case "damage":
             {
                 var current = combat!.Current;
+                if (combat.Step == "counter" && current is not null && combat.CounterId is not null)
+                {
+                    // Contra-ataque garantido: quem defendeu com crítico rola o dano no atacante.
+                    var counter = FindFighter(combat, combat.CounterId);
+                    if (!Controls(actor, counter))
+                    {
+                        return false;
+                    }
+                    var counterType = DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical";
+                    var counterDamage = Math.Max(0, total - ResistanceOf(room, current, counterType));
+                    DamageFighter(room, combat, current, counterDamage, counter);
+                    combat.LastEvent = new CombatEvent("counterDamage", counter.Id, current.Id, counterDamage);
+                    Advance(combat, room);
+                    return true;
+                }
                 if (combat.Step != "damage" || current is null || !Controls(actor, current) || combat.TargetId is null)
                 {
                     // Dano fora do passo certo: só uma rolagem, sem efeito.
                     return false;
                 }
                 var target = FindFighter(combat, combat.TargetId);
-                var type = DamageTypes.Contains(roll.DamageType) ? roll.DamageType! : "physical";
-                var resistance = ResistanceOf(room, target, type);
-                var damage = Math.Max(0, total - resistance);
+                // O tipo é o escolhido antes do ataque. Crítico: mágico ×1,3, físico e
+                // perfuração ×1,8, antes de descontar a resistência.
+                var type = combat.AttackType;
+                var dealt = combat.Critical ? (int)Math.Floor(total * (type == "magic" ? 1.3 : 1.8)) : total;
+                var damage = Math.Max(0, dealt - ResistanceOf(room, target, type));
                 DamageFighter(room, combat, target, damage, current);
-                combat.LastEvent = new CombatEvent("damage", current.Id, target.Id, damage);
+                combat.LastEvent = new CombatEvent("damage", current.Id, target.Id, damage) { Critical = combat.Critical, AbilityName = combat.AbilityName };
+                // O status escolhido no ataque entra junto com o dano.
+                if (combat.PendingStatusId is { } pending && !target.Dead)
+                {
+                    AddStatusStack(room, combat, target, pending, current.Id);
+                    combat.LastEvent = combat.LastEvent with { StatusId = pending };
+                }
                 Advance(combat, room);
                 return true;
             }
@@ -413,6 +478,12 @@ public sealed partial class TableHub
         combat.Step = "act";
         combat.TargetId = null;
         combat.AttackTotal = 0;
+        combat.AttackType = "physical";
+        combat.Critical = false;
+        combat.PendingStatusId = null;
+        combat.AbilityName = null;
+        combat.AbilityNotation = null;
+        combat.CounterId = null;
         if (combat.Fighters.Count == 0)
         {
             combat.TurnIndex = 0;
@@ -445,6 +516,7 @@ public sealed partial class TableHub
                 continue;
             }
             fighter.PotionUsed = false;
+            StartPowerTurn(fighter);
             combat.StepEndsUtc = DateTime.UtcNow + TurnTime;
             return;
         }
@@ -473,6 +545,12 @@ public sealed partial class TableHub
                     combat.StepEndsUtc = now + TurnTime;
                     current.Stats.Hits++;
                     combat.LastEvent = new CombatEvent("hitTimeout", current.Id, combat.TargetId, null);
+                }
+                else if (combat.Step == "counter")
+                {
+                    // Quem ia contra-atacar não rolou a tempo: perde o contra-ataque.
+                    combat.LastEvent = new CombatEvent("counterTimeout", combat.CounterId, current?.Id, null);
+                    Advance(combat, room);
                 }
                 else
                 {
@@ -595,7 +673,9 @@ public sealed partial class TableHub
                 fighter.PotionUsed,
                 reflex,
                 medicine,
-                fighter.Statuses.Select(effect => new StatusView(effect.Id, effect.Stacks, effect.TurnsLeft)).ToArray());
+                fighter.Statuses.Select(effect => new StatusView(effect.Id, effect.Stacks, effect.TurnsLeft)).ToArray(),
+                new Dictionary<string, int>(fighter.PowerUses),
+                new Dictionary<string, int>(fighter.PowerCooldowns));
         }).ToArray();
         return new CombatView(
             combat.Phase,
@@ -611,7 +691,13 @@ public sealed partial class TableHub
             fighters,
             combat.LastEvent,
             combat.LastTicks.ToArray(),
-            combat.StatusApplied);
+            combat.StatusApplied,
+            combat.AttackType,
+            combat.Critical,
+            combat.PendingStatusId,
+            combat.AbilityName,
+            combat.AbilityNotation,
+            combat.CounterId);
     }
 
     private async Task MasterCombat(Action<RoomState, CombatState?> change)
@@ -693,6 +779,14 @@ public sealed partial class TableHub
         public List<StatusTick> LastTicks { get; } = new();
         // Quem acertou já aplicou o status desta ação.
         public bool StatusApplied { get; set; }
+        // Ataque em andamento: tipo, crítico (20 natural), status que entra junto com o dano,
+        // habilidade usada e quem contra-ataca (crítico na defesa).
+        public string AttackType { get; set; } = "physical";
+        public bool Critical { get; set; }
+        public string? PendingStatusId { get; set; }
+        public string? AbilityName { get; set; }
+        public string? AbilityNotation { get; set; }
+        public string? CounterId { get; set; }
         public HashSet<string> ChangedAccounts { get; } = new(StringComparer.Ordinal);
         public Fighter? Current => TurnIndex >= 0 && TurnIndex < Fighters.Count ? Fighters[TurnIndex] : null;
     }
@@ -717,6 +811,9 @@ public sealed partial class TableHub
         public bool PenaltyArmed { get; set; }
         public List<StatusEffect> Statuses { get; } = new();
         public FighterStats Stats { get; } = new();
+        // Habilidades: usos neste turno e turnos de recarga que faltam.
+        public Dictionary<string, int> PowerUses { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, int> PowerCooldowns { get; } = new(StringComparer.Ordinal);
     }
 }
 
@@ -724,16 +821,20 @@ public sealed record BossRequest(string Name, int Hp, int ReflexBonus, int Resis
 
 // O que aconteceu por último (para o site mostrar uma frase curta).
 // Type: start, initiative, attack, hit, hitTimeout, miss, damage, passed, timeout,
-// rescued, rescuedCritical, rescueFailed, rescueFumble, bleeding, died, mercy, revived, paused, resumed.
+// rescued, rescuedCritical, rescueFailed, rescueFumble, bleeding, died, mercy, revived, paused, resumed,
+// magicHit, counter, counterDamage, counterTimeout, power (cura ou habilidade fora de ataque).
 public sealed record CombatEvent(string Type, string? ActorId, string? TargetId, int? Value)
 {
     public string? StatusId { get; init; }
+    public bool Critical { get; init; }
+    public string? AbilityName { get; init; }
 }
 
 public sealed record FighterView(string Id, string? PlayerId, string Name, bool IsBoss, int? Initiative, int Hp, int HpMax,
     bool Down, bool Defeated, int Chances, bool LastChance, bool Dead, int? Dt, bool PotionUsed, int Reflex, int Medicine,
-    IReadOnlyList<StatusView> Statuses);
+    IReadOnlyList<StatusView> Statuses, IReadOnlyDictionary<string, int> PowerUses, IReadOnlyDictionary<string, int> PowerCooldowns);
 
 // Deadline: quando acaba o tempo do passo atual (ms desde 1970).
 public sealed record CombatView(string Phase, bool Paused, int Round, string? CurrentId, string Step, string? TargetId, int AttackTotal,
-    long Deadline, IReadOnlyList<FighterView> Fighters, CombatEvent? LastEvent, IReadOnlyList<StatusTick> Ticks, bool StatusApplied);
+    long Deadline, IReadOnlyList<FighterView> Fighters, CombatEvent? LastEvent, IReadOnlyList<StatusTick> Ticks, bool StatusApplied,
+    string AttackType, bool Critical, string? PendingStatusId, string? AbilityName, string? AbilityNotation, string? CounterId);

@@ -14,12 +14,12 @@ import { avatarUrl, currentAccount, initAccount, onAccountChange } from './accou
 import { initSheet } from './sheet.js';
 import { initNotes } from './notes.js';
 import { describeEffect, initRollKind } from './rollkind.js';
-import { initCombat } from './combat.js';
+import { initCombat, STATUS_ICONS } from './combat.js';
 import { initShield } from './shield.js';
 import { initAmbient } from './ambient.js';
 import { applySeatLook, initSeatLookSettings } from './seatlook.js';
 import { initHome } from './home.js';
-import { skillTest } from './sheet.js';
+import { sheetLabel, skillTest } from './sheet.js';
 import { playTurn } from './sound.js';
 
 initSettings();
@@ -542,6 +542,8 @@ function rollDice(notation, override = null) {
     damageType: effect.damageType || null,
     manaCost: effect.manaCost || 0,
     effectTargetId: effect.effectTargetId || null,
+    statusId: effect.statusId || null,
+    abilityId: effect.abilityId || null,
     id: crypto.randomUUID(),
     notation: roll.notation,
     total: roll.total,
@@ -819,6 +821,99 @@ function renderSheetRolls() {
 sheets.onChange(renderSheetRolls);
 onAccountChange(renderSheetRolls);
 window.addEventListener('room-state', renderSheetRolls);
+
+// Habilidades da ficha, prontas para usar. Em combate, ataques rolam o teste da perícia
+// contra o alvo escolhido (o dano vem depois, pela faixa do combate); curas gastam a vez.
+const powersBlock = document.querySelector('#powers-block');
+const powersList = document.querySelector('#powers');
+const powerTarget = document.querySelector('#power-target');
+const signed = (value) => (value ? (value > 0 ? `+${value}` : String(value)) : '');
+
+function useAbility(sheet, power) {
+  const state = combat.powerState();
+  if (power.kind !== 'recovery' && state.inCombat) {
+    if (!state.myTurnAct) {
+      showFeedback('power.notYourTurn');
+      return;
+    }
+    if (!state.targetEnemy) {
+      showFeedback('power.chooseTarget');
+      return;
+    }
+    const notation = `1d20${signed(skillTest(sheet, power.skill))}`;
+    notationInput.value = notation;
+    rollDice(notation, { kind: 'attack', abilityId: power.id, damageType: power.kind, statusId: power.statusId || null });
+    return;
+  }
+  if (state.inCombat && !state.myTurnAct) {
+    showFeedback('power.notYourTurn');
+    return;
+  }
+  notationInput.value = power.notation;
+  const single = power.kind === 'recovery' && power.area !== 'area';
+  rollDice(power.notation, { kind: 'ability', abilityId: power.id, effectTargetId: single ? (powerTarget.value || null) : null });
+}
+
+function renderPowers() {
+  const sheet = currentAccount() && partyState.code && !partyState.isSpectator ? sheets.active() : null;
+  const powers = (sheet?.powers || []).filter((power) => power.name && power.notation);
+  powersBlock.hidden = powers.length === 0;
+  if (!sheet) {
+    powersList.replaceChildren();
+    return;
+  }
+  const state = combat.powerState();
+  // Alvo das curas individuais: você ou outro jogador com ficha.
+  const needsTarget = powers.some((power) => power.kind === 'recovery' && power.area !== 'area');
+  powerTarget.hidden = !needsTarget;
+  const previous = powerTarget.value;
+  powerTarget.replaceChildren(new Option(t('kind.onMe'), ''),
+    ...(partyState.players || []).filter((player) => player.id !== partyState.myPlayerId && player.status && !player.isMaster)
+      .map((player) => new Option(t('kind.onPlayer', { name: player.characterName || player.name }), player.id)));
+  powerTarget.value = [...powerTarget.options].some((option) => option.value === previous) ? previous : '';
+
+  powersList.replaceChildren(...powers.map((power) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quick-chip power-chip';
+    button.dataset.kind = power.kind === 'recovery' ? 'recovery' : power.kind;
+    const label = document.createElement('span');
+    label.textContent = `${power.statusId ? `${STATUS_ICONS[power.statusId] || ''} ` : ''}${power.name}`;
+    const meta = document.createElement('b');
+    const cooldown = state.cooldowns[power.id] || 0;
+    const uses = state.uses[power.id] || 0;
+    const parts = [power.notation];
+    if (power.eaCost > 0) {
+      parts.push(`${power.eaCost} ${sheetLabel(sheet, 'stat.ea')}`);
+    }
+    if (cooldown > 0) {
+      // O servidor guarda +1 (o próximo começo de turno já desconta).
+      parts.push(`⏳${Math.max(1, cooldown - 1)}`);
+    }
+    meta.textContent = parts.join(' · ');
+    button.append(label, meta);
+    const blocked = (power.eaCost > (sheet.ea?.current || 0) && 'power.noMana')
+      || (cooldown > 0 && 'power.cooling')
+      || (power.usesPerTurn > 0 && uses >= power.usesPerTurn && 'power.usedUp')
+      || '';
+    button.disabled = Boolean(blocked);
+    const details = [t(`power.kind.${power.kind}`)];
+    if (power.kind === 'recovery') {
+      details.push(t(power.area === 'area' ? 'power.area.area' : 'power.area.single'));
+    }
+    if (power.usesPerTurn > 0) {
+      details.push(t('power.usesLeft', { left: Math.max(0, power.usesPerTurn - uses), total: power.usesPerTurn }));
+    }
+    button.title = [details.join(' · '), blocked ? t(blocked) : ''].filter(Boolean).join(' — ');
+    button.addEventListener('click', () => useAbility(sheet, power));
+    return button;
+  }));
+}
+sheets.onChange(renderPowers);
+onAccountChange(renderPowers);
+window.addEventListener('room-state', renderPowers);
+window.addEventListener('room-combat', () => setTimeout(renderPowers));
+window.addEventListener('languagechange-app', renderPowers);
 
 reactions = initReactions({
   sendReaction: (targetPlayerId, emoji) => roomManager.sendReaction(targetPlayerId, emoji),

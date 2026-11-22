@@ -20,7 +20,9 @@ Com ela: foto na mesa, fichas (aba "Ficha"), notas da mesa (aba "Notas") e, para
 mestre, mesas salvas que reabrem com o mesmo código em "Minhas mesas".
 
 Combate: o mestre clica em "Iniciar combate" na mesa. Todos rolam iniciativa e, na sua
-vez, você escolhe o alvo e rola o ataque; a faixa de combate diz o que fazer em cada passo.
+vez, você escolhe o alvo, o tipo do ataque e um status (se quiser) e rola o ataque; a
+faixa de combate diz o que fazer em cada passo. 20 natural é crítico; 20 na defesa dá
+contra-ataque. As habilidades da ficha aparecem no rolador.
 O mestre tem a aba "Escudo": testes às cegas, trilha ambiente, chefes prontos e notas secretas.
 
 Mantenha todas as pastas juntas com o .exe. Para saber o que tem em cada uma, e como

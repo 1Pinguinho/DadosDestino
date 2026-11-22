@@ -65,6 +65,15 @@ public sealed partial class TableHub
         }
         var source = byAttacker ? current!.Id : null;
         combat.LastTicks.Clear();
+        AddStatusStack(room, combat, target, rule.Id, source);
+        combat.LastEvent = new CombatEvent("statusApplied", source, target.Id, null) { StatusId = rule.Id };
+    });
+
+    // Soma 1 stack (até o máximo) e renova a duração. Também usado quando o status
+    // escolhido no ataque entra junto com o dano.
+    private static void AddStatusStack(RoomState room, CombatState combat, Fighter target, string statusId, string? source)
+    {
+        var rule = StatusRules.First(candidate => candidate.Id == statusId);
         var effect = target.Statuses.FirstOrDefault(candidate => candidate.Id == rule.Id);
         if (effect is null)
         {
@@ -84,8 +93,7 @@ public sealed partial class TableHub
                 combat.LastTicks.Add(new StatusTick(target.Id, rule.Id, burst, true));
             }
         }
-        combat.LastEvent = new CombatEvent("statusApplied", source, target.Id, null) { StatusId = rule.Id };
-    });
+    }
 
     public Task RemoveStatus(string fighterId, string statusId) => CombatAction((_, combat, actor) =>
     {

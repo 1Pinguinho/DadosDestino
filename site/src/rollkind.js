@@ -118,6 +118,16 @@ export function describeEffect(roll, players = []) {
     const amount = Number.isFinite(roll.applied) ? `+${roll.applied} ` : '';
     return target ? t('effect.potionOn', { amount, stat, name: target }) : t('effect.potion', { amount, stat });
   }
+  if (roll.kind === 'ability') {
+    // Habilidade da ficha: nome e, se foi cura, quanto recuperou (e em quem).
+    const parts = [`✦ ${roll.label || t('effect.ability')}`];
+    if (Number.isFinite(roll.applied) && roll.recoverStat) {
+      const stat = t(roll.recoverStat === 'ea' ? 'kind.ea' : 'kind.hp');
+      const target = roll.effectTargetId && roll.effectTargetId !== roll.playerId ? nameOf(roll.effectTargetId) : '';
+      parts.push(target ? `+${roll.applied} ${stat} · ${target}` : `+${roll.applied} ${stat}`);
+    }
+    return parts.join(' · ');
+  }
   if (roll.kind === 'blind') {
     return t(roll.hidden ? 'effect.blindHidden' : 'effect.blind', { label: roll.label || '' });
   }

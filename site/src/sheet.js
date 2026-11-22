@@ -4,6 +4,7 @@
 // mudam pela mesa (poções, magias e, em combate, dano).
 import { t } from './i18n.js';
 import { api, currentAccount, onAccountChange } from './account.js';
+import { STATUS_ICONS } from './combat.js';
 
 export const SKILLS = [
   ['acrobacia', 'agl'], ['crime', 'agl'], ['furtividade', 'agl'], ['pilotagem', 'agl'],
@@ -46,6 +47,7 @@ function blankSheet() {
     system: 'abismo', labels: {},
     effects: [], abilities: [], inventory: [],
     quickRolls: [],
+    powers: [],
   };
 }
 
@@ -248,6 +250,77 @@ export function initSheet() {
     const details = el('details', { class: 'sheet-fold', open });
     details.append(el('summary', { text: t(key) }), el('div', { class: 'sheet-fold-body' }, ...content));
     return details;
+  }
+
+  // Habilidades prontas: ataques, magias e curas, com custo de EA, usos por turno,
+  // recarga e status. Na mesa elas aparecem no rolador, prontas para usar.
+  function powersEditor(sheet) {
+    sheet.powers ||= [];
+    const list = el('div', { class: 'power-list' });
+    const select = (options, value, label, onChange) => {
+      const element = el('select', { 'aria-label': label },
+        ...options.map(([id, text]) => el('option', { value: id, text, selected: id === value })));
+      element.addEventListener('change', () => onChange(element.value));
+      return element;
+    };
+    const small = (labelKey, input) => el('label', { class: 'power-field' }, el('span', { text: t(labelKey) }), input);
+
+    const draw = () => {
+      list.replaceChildren(...sheet.powers.map((power, index) => {
+        const changed = () => scheduleSave();
+        const remove = el('button', { class: 'text-button', type: 'button', text: '×', 'aria-label': t('sheet.removeItem') });
+        remove.addEventListener('click', () => {
+          sheet.powers.splice(index, 1);
+          draw();
+          scheduleSave();
+        });
+        const kind = select(['physical', 'magic', 'pierce', 'recovery'].map((id) => [id, t(`power.kind.${id}`)]), power.kind, t('power.kind'), (value) => {
+          power.kind = value;
+          if (value !== 'recovery') {
+            power.skill = { magic: 'magia', pierce: 'pontaria' }[value] || 'luta';
+          }
+          draw();
+          scheduleSave();
+        });
+        const top = el('div', { class: 'power-row' },
+          textInput(power.name, (value) => { power.name = value; changed(); }, { max: 30, label: t('power.name'), placeholder: t('power.name') }),
+          kind,
+          textInput(power.notation, (value) => { power.notation = value.replace(/\s+/g, ''); changed(); }, { max: 60, label: t('power.notation'), placeholder: power.kind === 'recovery' ? '2d8+2' : '2d6+3' }),
+          remove);
+        const common = [
+          small('power.ea', numberInput(power.eaCost, (value) => { power.eaCost = value; changed(); }, { min: 0, max: 9999 })),
+          small('power.uses', numberInput(power.usesPerTurn, (value) => { power.usesPerTurn = value; changed(); }, { min: 0, max: 10 })),
+          small('power.cooldown', numberInput(power.cooldown, (value) => { power.cooldown = value; changed(); }, { min: 0, max: 20 })),
+        ];
+        const details = power.kind === 'recovery'
+          ? [
+            small('power.recover', select([['hp', t('kind.hp')], ['ea', t('kind.ea')]], power.recoverStat, t('power.recover'), (value) => { power.recoverStat = value; changed(); })),
+            small('power.area', select([['single', t('power.area.single')], ['area', t('power.area.area')]], power.area, t('power.area'), (value) => { power.area = value; changed(); })),
+            ...common,
+          ]
+          : [
+            small('power.skill', select(SKILLS.map(([id]) => [id, sheetLabel(sheet, `skill.${id}`)]), power.skill, t('power.skill'), (value) => { power.skill = value; changed(); })),
+            ...common,
+            small('power.status', select([['', t('power.noStatus')], ...Object.keys(STATUS_ICONS).map((id) => [id, `${STATUS_ICONS[id]} ${t(`status.${id}`)}`])],
+              power.statusId || '', t('power.status'), (value) => { power.statusId = value || null; changed(); })),
+          ];
+        return el('div', { class: 'power-card', 'data-kind': power.kind }, top, el('div', { class: 'power-row power-details' }, ...details));
+      }));
+    };
+    draw();
+    const add = el('button', { class: 'room-button', type: 'button', text: t('power.add') });
+    add.addEventListener('click', () => {
+      if (sheet.powers.length >= 30) {
+        return;
+      }
+      sheet.powers.push({
+        id: crypto.randomUUID().replaceAll('-', ''), name: '', kind: 'physical', notation: '', skill: 'luta',
+        eaCost: 0, usesPerTurn: 0, cooldown: 0, statusId: null, recoverStat: 'hp', area: 'single',
+      });
+      draw();
+      list.lastElementChild?.querySelector('input')?.focus();
+    });
+    return fold('power.title', true, el('p', { class: 'field-hint', text: t('power.hint') }), list, add);
   }
 
   function render() {
@@ -499,7 +572,9 @@ export function initSheet() {
       }
     });
     // Ficam no topo da ficha, logo abaixo das ferramentas.
-    tools.after(fold('sheet.quickRolls', true, el('p', { class: 'field-hint', text: t('sheet.quickHint') }), quick, addQuick));
+    const quickFold = fold('sheet.quickRolls', true, el('p', { class: 'field-hint', text: t('sheet.quickHint') }), quick, addQuick);
+    tools.after(quickFold);
+    quickFold.after(powersEditor(sheet));
 
     refreshComputed();
   }
