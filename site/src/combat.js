@@ -459,6 +459,32 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     return element;
   }
 
+  // Linha sempre visível para o mestre: cada chefe com o automático (liga e desliga a
+  // qualquer hora) e o jeito de escolher alvos.
+  function bossControls() {
+    const bosses = view.fighters.filter((entry) => entry.isBoss && entry.boss && !entry.defeated);
+    if (!bosses.length) {
+      return null;
+    }
+    const row = document.createElement('div');
+    row.className = 'boss-controls';
+    for (const entry of bosses) {
+      const boss = entry.boss;
+      const auto = button(t(boss.auto ? 'boss.autoOn' : 'boss.autoOff'), () => run('SetBossAuto', entry.id, !boss.auto), 'combat-button boss-auto');
+      auto.setAttribute('aria-pressed', String(boss.auto));
+      const targeting = document.createElement('select');
+      targeting.setAttribute('aria-label', t('boss.targeting'));
+      targeting.append(new Option(t('boss.targetRandom'), 'random'), new Option(t('boss.targetAvoidWeak'), 'avoidWeak'));
+      targeting.value = boss.targeting;
+      targeting.addEventListener('change', () => run('SetBossTargeting', entry.id, targeting.value));
+      const item = document.createElement('div');
+      item.className = 'boss-control';
+      item.append(span('boss-control-name', entry.name), auto, targeting);
+      row.append(item);
+    }
+    return row;
+  }
+
   // Ferramentas do mestre: ordem, chefes, piedade e reviver.
   function masterTools() {
     const details = document.createElement('details');
@@ -480,14 +506,6 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
           boss.eaMax ? `${t('boss.ea')} ${boss.ea}/${boss.eaMax}` : '',
           boss.actions > 1 ? t('boss.actionsLeft', { left: boss.actionsLeft, total: boss.actions }) : '',
         ].filter(Boolean).join(' · ')));
-        const auto = button(t(boss.auto ? 'boss.autoOn' : 'boss.autoOff'), () => run('SetBossAuto', entry.id, !boss.auto), 'text-button boss-auto');
-        auto.setAttribute('aria-pressed', String(boss.auto));
-        const targeting = document.createElement('select');
-        targeting.setAttribute('aria-label', t('boss.targeting'));
-        targeting.append(new Option(t('boss.targetRandom'), 'random'), new Option(t('boss.targetAvoidWeak'), 'avoidWeak'));
-        targeting.value = boss.targeting;
-        targeting.addEventListener('change', () => run('SetBossTargeting', entry.id, targeting.value));
-        item.append(auto, targeting);
       }
       const move = (offset) => {
         const ids = view.fighters.map((candidate) => candidate.id);
@@ -600,6 +618,10 @@ export function initCombat({ manager, getRoom, getSheet, rollNotation, selectDam
     bar.replaceChildren(head, order, prompt(), event);
     if (isMaster()) {
       // Aviso só para o mestre, e só com algum chefe no automático.
+      const controls = bossControls();
+      if (controls) {
+        bar.append(controls);
+      }
       if (view.fighters.some((entry) => entry.boss?.auto)) {
         bar.append(span('combat-auto-warning', t('boss.tpkWarning')));
       }

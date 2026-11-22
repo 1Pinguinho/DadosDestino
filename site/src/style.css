@@ -1221,3 +1221,9 @@ html.reduce-motion .seat-weather { display: none; }
 .custom-item { display: inline-flex; align-items: center; gap: 4px; }
 .custom-item input[type='text'] { width: 130px; height: 28px; }
 .custom-item select { height: 28px; }
+/* Mestre: automático e alvos de cada chefe, sempre à vista na faixa do combate. */
+.boss-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.boss-control { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); }
+.boss-control-name { font: 600 13px var(--serif); }
+.boss-control select { height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); font: 10px var(--mono); }
+.boss-auto[aria-pressed='true'] { border-color: var(--warm); color: var(--warm); }

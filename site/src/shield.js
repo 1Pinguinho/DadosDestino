@@ -32,6 +32,7 @@ export function initShield({ manager }) {
   let combatActive = false;
   let bosses = null;
   let editing = null; // chefe sendo editado (ou {} para um novo)
+  let bossFormElement = null; // o formulário aberto (reaproveitado quando a aba redesenha)
   let armedBoss = '';
   let notesTimer = 0;
   let notesText = '';
@@ -165,6 +166,7 @@ export function initShield({ manager }) {
       });
       const edit = el('button', { class: 'text-button', type: 'button', text: t('notes.edit') });
       edit.addEventListener('click', () => {
+        bossFormElement = null;
         editing = { ...boss, skills: { ...(boss.skills || {}) }, powers: (boss.powers || []).map((power) => ({ ...power })) };
         render();
       });
@@ -192,13 +194,24 @@ export function initShield({ manager }) {
     }
     const add = el('button', { class: 'room-button', type: 'button', text: t('shield.bossNew') });
     add.addEventListener('click', () => {
+      bossFormElement = null;
       editing = { name: '', hp: 100, ea: 0, actions: 1, reflexBonus: 0, resistPhysical: 0, resistMagic: 0, resistPierce: 0, weaponName: '', weaponDamage: 0, weaponType: 'physical', skills: {}, powers: [], note: '' };
       render();
     });
     return section('shield.bossesTitle',
       bosses.length ? list : el('p', { class: 'field-hint', text: t('shield.bossesEmpty') }),
-      editing ? bossForm() : add,
+      editing ? (bossFormElement ||= bossForm()) : add,
       el('p', { class: 'room-feedback', text: bossFeedback }));
+  }
+
+  // Fecha o formulário do chefe (salvar ou cancelar) e redesenha a aba na hora.
+  function closeBossForm() {
+    editing = null;
+    bossFormElement = null;
+    if (view.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    render();
   }
 
   function bossForm() {
@@ -298,10 +311,7 @@ export function initShield({ manager }) {
 
     const save = el('button', { class: 'room-button room-button-primary', type: 'submit', text: t('room.save') });
     const cancel = el('button', { class: 'room-button', type: 'button', text: t('shortcut.cancel') });
-    cancel.addEventListener('click', () => {
-      editing = null;
-      render();
-    });
+    cancel.addEventListener('click', closeBossForm);
     const form = el('form', { class: 'boss-form' },
       el('div', { class: 'boss-form-grid' }, name.label, hp.label, ea.label, actions.label, reflex.label, physical.label, magic.label, pierce.label),
       el('span', { class: 'field-label', text: t('boss.weapon') }),
@@ -311,33 +321,54 @@ export function initShield({ manager }) {
       el('span', { class: 'field-label', text: t('power.title') }), powersBox, addPower,
       note,
       el('div', { class: 'note-form-actions' }, cancel, save));
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      if (!name.input.value.trim()) {
-        name.input.focus();
-        return;
-      }
-      const number = (input) => Number.parseInt(input.value, 10) || 0;
-      const updated = {
-        id: editing.id || '',
-        name: name.input.value.trim(),
-        hp: Math.max(1, number(hp.input)),
+    // Cada valor vai para "editing" na hora em que é digitado: nada se perde se a aba
+    // redesenhar, e Salvar usa exatamente o que está na tela.
+    const number = (input) => Number.parseInt(input.value, 10) || 0;
+    const sync = () => {
+      Object.assign(editing, {
+        name: name.input.value,
+        hp: number(hp.input),
         reflexBonus: number(reflex.input),
         resistPhysical: number(physical.input),
         resistMagic: number(magic.input),
         resistPierce: number(pierce.input),
-        ea: Math.max(0, number(ea.input)),
-        actions: Math.min(5, Math.max(1, number(actions.input))),
-        weaponName: weaponName.input.value.trim(),
-        weaponDamage: Math.max(0, number(weaponDamage.input)),
+        ea: number(ea.input),
+        actions: number(actions.input),
+        weaponName: weaponName.input.value,
+        weaponDamage: number(weaponDamage.input),
         weaponType: weaponType.value,
+        note: note.value,
+      });
+    };
+    form.addEventListener('input', sync);
+    form.addEventListener('change', sync);
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      sync();
+      if (!editing.name.trim()) {
+        name.input.focus();
+        return;
+      }
+      const updated = {
+        id: editing.id || '',
+        name: editing.name.trim(),
+        hp: Math.max(1, editing.hp),
+        reflexBonus: editing.reflexBonus,
+        resistPhysical: Math.max(0, editing.resistPhysical),
+        resistMagic: Math.max(0, editing.resistMagic),
+        resistPierce: Math.max(0, editing.resistPierce),
+        ea: Math.max(0, editing.ea),
+        actions: Math.min(5, Math.max(1, editing.actions)),
+        weaponName: editing.weaponName.trim(),
+        weaponDamage: Math.max(0, editing.weaponDamage),
+        weaponType: editing.weaponType,
         skills: { ...editing.skills },
         powers: editing.powers.filter((power) => (power.name || '').trim() && (power.notation || '').trim()),
-        note: note.value.trim(),
+        note: editing.note.trim(),
       };
       const next = editing.id ? bosses.map((boss) => (boss.id === editing.id ? updated : boss)) : [...bosses, updated];
       const changedId = editing.id || '';
-      editing = null;
+      closeBossForm();
       saveBosses(next, changedId);
     });
     return form;
@@ -393,9 +424,10 @@ export function initShield({ manager }) {
       }
       return;
     }
-    // Não redesenha enquanto o mestre digita nas notas ou no formulário.
+    // Não redesenha enquanto o mestre digita nas notas secretas. O formulário do chefe é
+    // reaproveitado (o mesmo elemento), então pode redesenhar sem perder nada.
     const focused = document.activeElement;
-    if (focused && view.contains(focused) && (focused.tagName === 'TEXTAREA' || focused.closest('.boss-form'))) {
+    if (focused && view.contains(focused) && (focused.classList.contains('shield-notes') || bossFormElement?.contains(focused))) {
       return;
     }
     view.replaceChildren(
